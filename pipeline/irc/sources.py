@@ -184,11 +184,21 @@ def _ac_brands(supported_md: Path) -> dict[str, list[str]]:
     return brands
 
 
+def _ac_remote_hints(src: Path) -> dict[tuple[str, str], list[str]]:
+    """'Model: A75C3704 remote (PANASONIC_AC DKE/3)' comments -> {(PROTO, MODEL): [remote names]}."""
+    hints: dict[tuple[str, str], list[str]] = {}
+    for header in src.glob("ir_*.h"):
+        for m in re.finditer(r"Model: ([^(\n]+?) \((\w+) ([\w-]+)/\d+\)", header.read_text(errors="replace")):
+            hints.setdefault((m.group(2), m.group(3).upper()), []).append(m.group(1).strip())
+    return hints
+
+
 def iter_irremoteesp8266(lib_root: Path, states_tsv: Path) -> Iterator[Codeset]:
     if not states_tsv.exists():
         print(f"  ! {states_tsv} missing — run irremote/build_ac.sh; skipping IRremoteESP8266")
         return
     file_brands = _ac_brands(lib_root / "SupportedProtocols.md")
+    hints = _ac_remote_hints(lib_root / "src")
     by_proto: dict[str, list[Button]] = {}
     for line in states_tsv.read_text().splitlines():
         proto, label, params, freq, timings = line.split("\t")
@@ -210,7 +220,12 @@ def iter_irremoteesp8266(lib_root: Path, states_tsv: Path) -> Iterator[Codeset]:
         if len({tuple(b.signal.intro) for b in buttons}) < MIN_DISTINCT_AC_STATES:
             print(f"  ! {proto}: settings have no effect with the default model, skipped")
             continue
-        key = re.sub(r"[^a-z0-9]", "", proto.lower())
+        base, _, model = proto.partition("#")
+        key = re.sub(r"[^a-z0-9]", "", base.lower())
         source_file = max((f for f in file_brands if key.startswith(f)), key=len, default=None)
-        for brand in file_brands.get(source_file, [proto.split("_")[0].title()]):
-            yield Codeset("irremoteesp8266", f"src/ir_{source_file}.cpp#{proto}", brand, proto, "ac", buttons)
+        name = f"{base} {model}".strip()
+        remotes = hints.get((base, model.upper()), [])
+        if remotes:
+            name += " · " + ", ".join(remotes)
+        for brand in file_brands.get(source_file, [base.split("_")[0].title()]):
+            yield Codeset("irremoteesp8266", f"src/ir_{source_file}.cpp#{proto}", brand, name, "ac", buttons)
