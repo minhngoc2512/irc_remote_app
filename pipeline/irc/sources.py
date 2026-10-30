@@ -193,6 +193,38 @@ def _ac_remote_hints(src: Path) -> dict[tuple[str, str], list[str]]:
     return hints
 
 
+def _panasonic_patch(timings: list[int], byte_index: int, value: int) -> list[int]:
+    """Rewrite one byte of a Panasonic A/C data frame and fix its checksum (sum of bytes mod 256).
+
+    Panasonic frames: header mark > 2500 µs, then pulse-distance bits LSB first;
+    the data frame is the last one and its final byte is the checksum.
+    """
+    t = list(timings)
+    frames: list[list[int]] = []  # per frame: indices of the space that encodes each bit
+    for i in range(0, len(t) - 1, 2):
+        if t[i] > 2500:
+            frames.append([])
+        elif frames and t[i + 1] < 5000:
+            frames[-1].append(i + 1)
+    spaces = frames[-1]
+    zero, one = min(t[i] for i in spaces), max(t[i] for i in spaces)
+    data = [sum((t[spaces[b * 8 + k]] > (zero + one) / 2) << k for k in range(8)) for b in range(len(spaces) // 8)]
+    data[byte_index] = value
+    data[-1] = sum(data[:-1]) & 0xFF
+    for b, byte in enumerate(data):
+        for k in range(8):
+            t[spaces[b * 8 + k]] = one if (byte >> k) & 1 else zero
+    return t
+
+
+# Real captures of Vietnamese "nanoe-G" inverter remotes (Flipper-IRDB
+# Panasonic_CWA75C4179.ir) match RKR except data byte 15 = 0x81 instead of 0x89.
+_DERIVED_AC = {
+    "PANASONIC_AC#A75C4xxx": ("PANASONIC_AC#RKR", lambda t: _panasonic_patch(t, 15, 0x81),
+                              "remote nanoe-G A75C4xxx (A75C4179, A75C4187…)"),
+}
+
+
 def iter_irremoteesp8266(lib_root: Path, states_tsv: Path) -> Iterator[Codeset]:
     if not states_tsv.exists():
         print(f"  ! {states_tsv} missing — run irremote/build_ac.sh; skipping IRremoteESP8266")
@@ -215,6 +247,18 @@ def iter_irremoteesp8266(lib_root: Path, states_tsv: Path) -> Iterator[Codeset]:
         by_proto.setdefault(proto, []).append(Button(
             label=label, signal=Signal(int(freq), t, t), protocol=f"IRremoteESP8266:{proto}", params=params,
             func_key="POWER_OFF" if params == "power=0" else "AC"))
+
+    for derived, (parent, patch, hint) in _DERIVED_AC.items():
+        if parent in by_proto:
+            by_proto[derived] = []
+            for b in by_proto[parent]:
+                t = patch(b.signal.intro)
+                by_proto[derived].append(Button(b.label, Signal(b.signal.freq, t, t), b.protocol.replace(parent.split("#")[1], derived.split("#")[1]),
+                                                b.params, func_key=b.func_key))
+            base, _, model = derived.partition("#")
+            hints[(base, model.upper())] = [hint]
+            # Matched against real captures, so offer it before the generic models.
+            by_proto = {derived: by_proto.pop(derived), **by_proto}
 
     for proto, buttons in by_proto.items():
         if len({tuple(b.signal.intro) for b in buttons}) < MIN_DISTINCT_AC_STATES:
