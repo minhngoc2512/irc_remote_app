@@ -79,11 +79,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.minhngoc.irremote.data.IrButton
+import com.minhngoc.irremote.data.KeySpec
 import com.minhngoc.irremote.ui.HOLDABLE
 import com.minhngoc.irremote.ui.LocalDeps
 import com.minhngoc.irremote.ui.theme.LocalPalette
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * Where key presses go. Null (the default) means the IR blaster; network
+ * remotes provide their own sender for the keys under them.
+ */
+interface KeySender {
+    fun press(key: KeySpec): Boolean
+    fun repeat(key: KeySpec)
+}
+
+val LocalKeySender = androidx.compose.runtime.staticCompositionLocalOf<KeySender?> { null }
 
 /** Glyph for a normalized button function; null means "show the label". */
 fun funcIcon(key: String?): ImageVector? = when (key) {
@@ -148,7 +160,7 @@ val KEY_COLORS = mapOf(
  */
 @Composable
 fun IrKey(
-    button: IrButton,
+    button: KeySpec,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(18.dp),
     container: Color = LocalPalette.current.key,
@@ -157,6 +169,7 @@ fun IrKey(
     content: @Composable () -> Unit = { KeyFace(button) },
 ) {
     val ir = LocalDeps.current.ir
+    val sender = LocalKeySender.current
     val palette = LocalPalette.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -177,8 +190,9 @@ fun IrKey(
                     var sent = false
                     fun sendOnce() {
                         sent = true
-                        if (!ir.send(button)) {
-                            Toast.makeText(context, "Điện thoại không có cổng hồng ngoại", Toast.LENGTH_SHORT).show()
+                        if (!(sender?.press(button) ?: ir.send(button as IrButton))) {
+                            val why = if (sender != null) "Chưa kết nối được với TV" else "Điện thoại không có cổng hồng ngoại"
+                            Toast.makeText(context, why, Toast.LENGTH_SHORT).show()
                         }
                     }
                     val repeater = if (holdable) scope.launch {
@@ -186,7 +200,7 @@ fun IrKey(
                         sendOnce()
                         while (true) {
                             delay(110)
-                            ir.sendRepeat(button)
+                            sender?.repeat(button) ?: ir.sendRepeat(button as IrButton)
                         }
                     } else null
                     val released = tryAwaitRelease()
@@ -206,7 +220,7 @@ private fun lerpPressed(container: Color, pressed: Color): Color =
     if (container.alpha < 1f || container == pressed) pressed else androidx.compose.ui.graphics.lerp(container, Color.Black, 0.12f)
 
 @Composable
-fun KeyFace(button: IrButton, iconSize: Dp = 24.dp) {
+fun KeyFace(button: KeySpec, iconSize: Dp = 24.dp) {
     val icon = funcIcon(button.funcKey)
     val text = FUNC_TEXT[button.funcKey]
     when {
@@ -225,7 +239,7 @@ fun KeyFace(button: IrButton, iconSize: Dp = 24.dp) {
 
 /** Round red power key, the one element every remote shares. */
 @Composable
-fun PowerKey(button: IrButton, size: Dp = 64.dp) {
+fun PowerKey(button: KeySpec, size: Dp = 64.dp) {
     val palette = LocalPalette.current
     IrKey(button, Modifier.size(size), shape = CircleShape, container = palette.power, contentColor = Color.White, elevation = 6.dp) {
         Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Nguồn", modifier = Modifier.size(size * 0.42f))
@@ -234,7 +248,7 @@ fun PowerKey(button: IrButton, size: Dp = 64.dp) {
 
 /** Vertical pill rocker in a recessed track: + on top, − below, caption between. */
 @Composable
-fun Rocker(caption: String, up: IrButton?, down: IrButton?, width: Dp = 64.dp, captionIcon: ImageVector? = null) {
+fun Rocker(caption: String, up: KeySpec?, down: KeySpec?, width: Dp = 64.dp, captionIcon: ImageVector? = null) {
     if (up == null && down == null) return
     val palette = LocalPalette.current
     Column(
@@ -262,7 +276,7 @@ fun Rocker(caption: String, up: IrButton?, down: IrButton?, width: Dp = 64.dp, c
 
 /** Circular navigation pad: four arrow keys around an accent-colored OK. */
 @Composable
-fun DPad(up: IrButton?, down: IrButton?, left: IrButton?, right: IrButton?, ok: IrButton?, accent: Color, size: Dp = 196.dp) {
+fun DPad(up: KeySpec?, down: KeySpec?, left: KeySpec?, right: KeySpec?, ok: KeySpec?, accent: Color, size: Dp = 196.dp) {
     if (listOfNotNull(up, down, left, right, ok).isEmpty()) return
     val palette = LocalPalette.current
     val arm = size * 0.30f
@@ -285,7 +299,7 @@ fun DPad(up: IrButton?, down: IrButton?, left: IrButton?, right: IrButton?, ok: 
 
 /** A row of equally wide small keys; renders nothing if none of them exist. */
 @Composable
-fun KeyRow(buttons: List<IrButton>, height: Dp = 52.dp, keyContainer: (IrButton) -> Color? = { null }) {
+fun KeyRow(buttons: List<KeySpec>, height: Dp = 52.dp, keyContainer: (KeySpec) -> Color? = { null }) {
     if (buttons.isEmpty()) return
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         buttons.forEach { b ->

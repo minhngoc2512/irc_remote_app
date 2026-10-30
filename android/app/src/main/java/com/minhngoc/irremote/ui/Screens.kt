@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -34,6 +35,8 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.ui.platform.LocalContext
+import android.view.KeyEvent
+import com.minhngoc.irremote.atv.AtvRemote
 import com.minhngoc.irremote.ui.remote.AcMemory
 import com.minhngoc.irremote.ui.remote.acButtonFor
 import com.minhngoc.irremote.ui.remote.acModeLabel
@@ -240,15 +243,19 @@ private fun DeviceCard(device: UserDevice, onOpen: () -> Unit, onRename: () -> U
     val deps = LocalDeps.current
     val palette = LocalPalette.current
     val context = LocalContext.current
-    val style = deviceStyle(device.categoryKey)
+    val style = deviceStyle(if (device.isNetwork) device.kind else device.categoryKey)
     val buttons by loadAsync(device.id) {
-        deps.db.buttons(device.codesetUid?.let { deps.db.codesetId(it) } ?: device.codesetId)
+        if (device.isNetwork) emptyList() else deps.db.buttons(device.codesetUid?.let { deps.db.codesetId(it) } ?: device.codesetId)
+    }
+    val atv by loadAsync(device.id) {
+        device.host?.takeIf { device.kind == UserDevice.KIND_ATV }?.let { AtvRemote.of(it, deps.atvIdentity.value) }
     }
     val acButtons = remember(buttons) { acStateButtons(buttons.orEmpty()).associateBy { it.params!! } }
     var ac by remember(device.id) { mutableStateOf(AcMemory.load(context, device.id)) }
     var menu by remember { mutableStateOf(false) }
 
     val power: (() -> Unit)? = when {
+        device.isNetwork -> atv?.let { client -> { client.sendKey(KeyEvent.KEYCODE_POWER); Unit } }
         acButtons.isNotEmpty() -> {
             {
                 val next = ac.copy(power = !ac.power)
@@ -268,6 +275,7 @@ private fun DeviceCard(device: UserDevice, onOpen: () -> Unit, onRename: () -> U
     val status = when {
         isAc && ac.power -> "Đang bật · ${acModeLabel(ac.mode)}${if (ac.mode != "fan") " ${ac.temp}°" else ""}"
         isAc -> "Đang tắt · ${device.brandName}"
+        device.isNetwork -> "Android TV · Wi-Fi"
         else -> "${device.brandName} · ${style.name}"
     }
 
@@ -363,6 +371,34 @@ fun CategoryScreen(nav: Navigator) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(padding),
         ) {
+            // Network remote first: it is the only option on phones without an IR blaster.
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                val atv = deviceStyle("atv")
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.tile(RoundedCornerShape(22.dp)).background(atv.accent)
+                        .clickable { nav.push(Screen.AtvAdd) }.padding(14.dp),
+                ) {
+                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center) {
+                        Icon(atv.icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+                    }
+                    Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                        Text("Android TV qua Wi-Fi", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                        Text(
+                            if (deps.ir.available) "Mi Box, Google TV… điều khiển qua mạng, không cần hướng điện thoại"
+                            else "Dùng được trên điện thoại không có cổng hồng ngoại",
+                            style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f),
+                        )
+                    }
+                }
+            }
+            if (!deps.ir.available) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text("Các loại dưới đây cần cổng hồng ngoại", style = MaterialTheme.typography.labelMedium,
+                        color = palette.inkSoft, modifier = Modifier.padding(top = 8.dp))
+                }
+            }
             items(list, key = { it.id }) { c ->
                 val style = deviceStyle(c.key)
                 Row(

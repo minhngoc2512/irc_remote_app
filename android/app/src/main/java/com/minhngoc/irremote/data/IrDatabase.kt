@@ -15,15 +15,22 @@ data class Codeset(
     val source: String,
     val buttonCount: Int,
 )
+/** Anything a remote key can stand for: an IR button, or a key sent over the network. */
+interface KeySpec {
+    val id: Long
+    val funcKey: String?
+    val label: String
+}
+
 data class IrButton(
-    val id: Long,
-    val funcKey: String?,
-    val label: String,
+    override val id: Long,
+    override val funcKey: String?,
+    override val label: String,
     val freq: Int,
     val pattern: IntArray,
     val repeat: IntArray?,
     val params: String?,
-)
+) : KeySpec
 data class Source(val name: String, val url: String, val license: String, val revision: String)
 
 /**

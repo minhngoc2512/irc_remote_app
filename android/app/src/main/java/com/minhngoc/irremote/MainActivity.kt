@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import com.minhngoc.irremote.atv.AtvIdentity
 import com.minhngoc.irremote.data.IrDatabase
 import com.minhngoc.irremote.data.UserDevices
 import com.minhngoc.irremote.ir.IrTransmitter
@@ -31,7 +32,10 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition { deps == null }
         lifecycleScope.launch {
             deps = withContext(Dispatchers.IO) {
-                AppDeps(IrDatabase.get(application), UserDevices.get(application), IrTransmitter(application))
+                AppDeps(
+                    IrDatabase.get(application), UserDevices.get(application), IrTransmitter(application),
+                    lazy { AtvIdentity.load(application.filesDir) },
+                )
             }
         }
         setContent {

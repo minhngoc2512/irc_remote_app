@@ -14,7 +14,10 @@ import com.minhngoc.irremote.data.Category
 import com.minhngoc.irremote.data.UserDevice
 import com.minhngoc.irremote.data.IrDatabase
 import com.minhngoc.irremote.data.UserDevices
+import com.minhngoc.irremote.atv.AtvIdentity
 import com.minhngoc.irremote.ir.IrTransmitter
+import com.minhngoc.irremote.ui.atv.AtvAddScreen
+import com.minhngoc.irremote.ui.atv.AtvRemoteScreen
 import com.minhngoc.irremote.ui.remote.RemoteScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,9 +29,16 @@ sealed interface Screen {
     data class Match(val category: Category, val brand: Brand) : Screen
     data class Remote(val device: UserDevice) : Screen
     data object About : Screen
+    data object AtvAdd : Screen
 }
 
-class AppDeps(val db: IrDatabase, val devices: UserDevices, val ir: IrTransmitter)
+class AppDeps(
+    val db: IrDatabase,
+    val devices: UserDevices,
+    val ir: IrTransmitter,
+    /** Created on first use (RSA key generation); read it off the main thread. */
+    val atvIdentity: Lazy<AtvIdentity>,
+)
 
 val LocalDeps: ProvidableCompositionLocal<AppDeps> = staticCompositionLocalOf { error("AppDeps not provided") }
 
@@ -58,7 +68,9 @@ fun IrApp(deps: AppDeps) {
             Screen.Categories -> CategoryScreen(nav)
             is Screen.Brands -> BrandScreen(nav, screen.category)
             is Screen.Match -> MatchScreen(nav, screen.category, screen.brand)
-            is Screen.Remote -> RemoteScreen(nav, screen.device)
+            is Screen.Remote ->
+                if (screen.device.kind == UserDevice.KIND_ATV) AtvRemoteScreen(nav, screen.device) else RemoteScreen(nav, screen.device)
+            Screen.AtvAdd -> AtvAddScreen(nav)
             Screen.About -> AboutScreen(nav)
         }
     }

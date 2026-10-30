@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -60,6 +61,7 @@ import com.minhngoc.irremote.ui.LocalDeps
 import com.minhngoc.irremote.ui.Navigator
 import com.minhngoc.irremote.ui.NoEmitterBanner
 import com.minhngoc.irremote.ui.loadAsync
+import com.minhngoc.irremote.ui.theme.DeviceStyle
 import com.minhngoc.irremote.ui.theme.LocalPalette
 import com.minhngoc.irremote.ui.theme.deviceStyle
 
@@ -93,76 +95,93 @@ fun RemoteScreen(nav: Navigator, device: UserDevice) {
     }
     var showMore by remember { mutableStateOf(false) }
 
-    Surface(color = palette.room, contentColor = palette.ink, modifier = Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        // Header: device identity in its category color.
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 4.dp)) {
-            IconButton(onClick = nav::pop) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại") }
-            Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(style.accent), contentAlignment = Alignment.Center) {
-                Icon(style.icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
-            }
-            Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                Text(device.name, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${device.brandName} · ${style.name}", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
-            }
-        }
-
-        val all = buttons
-        if (all == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = style.accent) }
-            return@Column
-        }
+    RemoteFrame(nav, device.name, "${device.brandName} · ${style.name}", style, loading = buttons == null) {
+        val all = buttons.orEmpty()
         val acStates = acStateButtons(all)
-
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            NoEmitterBanner()
-            // The remote body: one molded slab that carries the keys.
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(18.dp),
-                modifier = Modifier
-                    .padding(vertical = 12.dp)
-                    .widthIn(max = 420.dp)
-                    .fillMaxWidth()
-                    .shadow(10.dp, RoundedCornerShape(40.dp), ambientColor = palette.shadow, spotColor = palette.shadow)
-                    .clip(RoundedCornerShape(40.dp))
-                    .background(Brush.verticalGradient(listOf(palette.body, palette.body.copy(alpha = 0.96f))))
-                    .padding(horizontal = 18.dp, vertical = 24.dp),
-            ) {
-                val rest: List<IrButton> = when {
-                    acStates.isNotEmpty() -> {
-                        AcRemote(acStates, device.id)
-                        all - acStates.toSet()
-                    }
-                    device.categoryKey == "fan" -> FanLayout(all, style.accent)
-                    device.categoryKey == "light" -> LightLayout(all, style.accent)
-                    device.categoryKey in setOf("soundbar", "audio") -> AudioLayout(all, style.accent)
-                    else -> MediaLayout(all, style.accent, mediaFirst = device.categoryKey in setOf("player", "stb"))
-                }
-                // Few standard keys (e.g. raw A/C captures): show the device's own keys right on the body.
-                if (rest.isNotEmpty() && rest.size <= 12 || all.size - rest.size < 4) {
-                    LabelKeys(rest)
-                } else if (rest.isNotEmpty()) {
-                    TextButton(onClick = { showMore = true }) {
-                        Icon(Icons.Filled.MoreHoriz, null, tint = style.accent)
-                        Text("  Nút khác (${rest.size})", color = style.accent, style = MaterialTheme.typography.labelLarge)
-                    }
-                }
-                if (showMore) {
-                    ModalBottomSheet(onDismissRequest = { showMore = false }, containerColor = palette.body) {
-                        Text("Nút khác", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp))
-                        Text("Các nút riêng của thiết bị, giữ nguyên tên trong bộ mã.", style = MaterialTheme.typography.bodySmall,
-                            color = palette.inkSoft, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
-                        Box(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) { LabelKeys(rest) }
-                    }
-                }
+        val rest: List<IrButton> = when {
+            acStates.isNotEmpty() -> {
+                AcRemote(acStates, device.id)
+                all - acStates.toSet()
             }
-            Spacer(Modifier.height(24.dp))
+            device.categoryKey == "fan" -> FanLayout(all, style.accent)
+            device.categoryKey == "light" -> LightLayout(all, style.accent)
+            device.categoryKey in setOf("soundbar", "audio") -> AudioLayout(all, style.accent)
+            else -> MediaLayout(all, style.accent, mediaFirst = device.categoryKey in setOf("player", "stb"))
+        }
+        // Few standard keys (e.g. raw A/C captures): show the device's own keys right on the body.
+        if (rest.isNotEmpty() && rest.size <= 12 || all.size - rest.size < 4) {
+            LabelKeys(rest)
+        } else if (rest.isNotEmpty()) {
+            TextButton(onClick = { showMore = true }) {
+                Icon(Icons.Filled.MoreHoriz, null, tint = style.accent)
+                Text("  Nút khác (${rest.size})", color = style.accent, style = MaterialTheme.typography.labelLarge)
+            }
+        }
+        if (showMore) {
+            ModalBottomSheet(onDismissRequest = { showMore = false }, containerColor = palette.body) {
+                Text("Nút khác", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp))
+                Text("Các nút riêng của thiết bị, giữ nguyên tên trong bộ mã.", style = MaterialTheme.typography.bodySmall,
+                    color = palette.inkSoft, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
+                Box(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) { LabelKeys(rest) }
+            }
         }
     }
+}
+
+/**
+ * Screen frame shared by every remote: a header with the device identity and
+ * the molded remote body that carries [body]. [above] sits between the two
+ * (warnings, connection status).
+ */
+@Composable
+fun RemoteFrame(
+    nav: Navigator,
+    title: String,
+    subtitle: String,
+    style: DeviceStyle,
+    loading: Boolean = false,
+    above: @Composable () -> Unit = { NoEmitterBanner() },
+    body: @Composable ColumnScope.() -> Unit,
+) {
+    val palette = LocalPalette.current
+    Surface(color = palette.room, contentColor = palette.ink, modifier = Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 4.dp)) {
+                IconButton(onClick = nav::pop) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại") }
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(style.accent), contentAlignment = Alignment.Center) {
+                    Icon(style.icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                }
+                Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = palette.inkSoft, maxLines = 1)
+                }
+            }
+            if (loading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = style.accent) }
+                return@Column
+            }
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                above()
+                // The remote body: one molded slab that carries the keys.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                    modifier = Modifier
+                        .padding(vertical = 12.dp)
+                        .widthIn(max = 420.dp)
+                        .fillMaxWidth()
+                        .shadow(10.dp, RoundedCornerShape(40.dp), ambientColor = palette.shadow, spotColor = palette.shadow)
+                        .clip(RoundedCornerShape(40.dp))
+                        .background(Brush.verticalGradient(listOf(palette.body, palette.body.copy(alpha = 0.96f))))
+                        .padding(horizontal = 18.dp, vertical = 24.dp),
+                    content = body,
+                )
+                Spacer(Modifier.height(24.dp))
+            }
+        }
     }
 }
 
