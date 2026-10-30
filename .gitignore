@@ -1,0 +1,16 @@
+# Upstream databases (pipeline/fetch_sources.sh) and generated outputs
+pipeline/sources/
+pipeline/build/
+pipeline/out/
+__pycache__/
+
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+.kotlin/
+
+.DS_Store
