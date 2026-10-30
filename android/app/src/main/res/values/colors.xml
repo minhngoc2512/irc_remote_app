@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mirrors RemotePalette.room in ui/theme/Theme.kt so the window never flashes another color. -->
+    <color name="room">#FFE8ECF0</color>
+    <color name="launcher_background">#FF1F3A5F</color>
+</resources>

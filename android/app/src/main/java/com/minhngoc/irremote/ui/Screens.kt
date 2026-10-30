@@ -1,9 +1,7 @@
 package com.minhngoc.irremote.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -30,8 +27,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.platform.LocalContext
+import com.minhngoc.irremote.ui.remote.AcMemory
+import com.minhngoc.irremote.ui.remote.acButtonFor
+import com.minhngoc.irremote.ui.remote.acModeLabel
+import com.minhngoc.irremote.ui.remote.acStateButtons
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -145,7 +151,6 @@ private fun Modifier.tile(shape: RoundedCornerShape = RoundedCornerShape(26.dp))
 
 // --- Home ----------------------------------------------------------------------------------
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(nav: Navigator) {
     val deps = LocalDeps.current
@@ -153,13 +158,14 @@ fun HomeScreen(nav: Navigator) {
     var version by remember { mutableIntStateOf(0) }
     val devices by loadAsync(version) { deps.devices.all() }
     var deleting by remember { mutableStateOf<UserDevice?>(null) }
+    var renaming by remember { mutableStateOf<UserDevice?>(null) }
     val scope = rememberCoroutineScope()
 
     AppScaffold(
         title = "Thiết bị của tôi",
         nav = null,
-        subtitle = devices?.takeIf { it.isNotEmpty() }?.let { "${it.size} thiết bị · giữ một thẻ để xóa" },
-        actions = { IconButton(onClick = { nav.push(Screen.About) }) { Icon(Icons.Filled.Info, "Nguồn dữ liệu") } },
+        subtitle = devices?.takeIf { it.isNotEmpty() }?.let { "${it.size} thiết bị" },
+        actions = { IconButton(onClick = { nav.push(Screen.About) }) { Icon(Icons.Outlined.Info, "Nguồn dữ liệu") } },
         fab = {
             if (devices?.isNotEmpty() == true) {
                 ExtendedFloatingActionButton(
@@ -176,34 +182,36 @@ fun HomeScreen(nav: Navigator) {
             EmptyHome(padding) { nav.push(Screen.Categories) }
             return@AppScaffold
         }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(160.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        LazyColumn(
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 112.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.padding(padding),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }) { NoEmitterBanner() }
+            item { NoEmitterBanner() }
             items(list, key = { it.id }) { d ->
-                val style = deviceStyle(d.categoryKey)
-                Column(
-                    Modifier
-                        .shadow(4.dp, RoundedCornerShape(26.dp), spotColor = palette.shadow, ambientColor = palette.shadow)
-                        .tile()
-                        .background(palette.body)
-                        .combinedClickable(onClick = { nav.push(Screen.Remote(d)) }, onLongClick = { deleting = d })
-                        .padding(16.dp),
-                ) {
-                    CategoryBadge(style, 44.dp)
-                    Spacer(Modifier.height(18.dp))
-                    Text(d.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("${d.brandName} · ${style.name}", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
+                DeviceCard(d, onOpen = { nav.push(Screen.Remote(d)) }, onRename = { renaming = d }, onDelete = { deleting = d })
             }
         }
     }
 
+    renaming?.let { d ->
+        var name by remember(d.id) { mutableStateOf(d.name) }
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Đổi tên thiết bị") },
+            text = { OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true) },
+            confirmButton = {
+                TextButton(enabled = name.isNotBlank(), onClick = {
+                    scope.launch {
+                        withContext(Dispatchers.IO) { deps.devices.rename(d.id, name.trim()) }
+                        renaming = null
+                        version++
+                    }
+                }) { Text("Lưu") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Hủy") } },
+        )
+    }
     deleting?.let { d ->
         AlertDialog(
             onDismissRequest = { deleting = null },
@@ -220,6 +228,91 @@ fun HomeScreen(nav: Navigator) {
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Giữ lại") } },
         )
+    }
+}
+
+/**
+ * One saved device: tap to open its remote, power key to switch it without
+ * opening. A/C cards also show the state last sent to the unit.
+ */
+@Composable
+private fun DeviceCard(device: UserDevice, onOpen: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+    val deps = LocalDeps.current
+    val palette = LocalPalette.current
+    val context = LocalContext.current
+    val style = deviceStyle(device.categoryKey)
+    val buttons by loadAsync(device.id) {
+        deps.db.buttons(device.codesetUid?.let { deps.db.codesetId(it) } ?: device.codesetId)
+    }
+    val acButtons = remember(buttons) { acStateButtons(buttons.orEmpty()).associateBy { it.params!! } }
+    var ac by remember(device.id) { mutableStateOf(AcMemory.load(context, device.id)) }
+    var menu by remember { mutableStateOf(false) }
+
+    val power: (() -> Unit)? = when {
+        acButtons.isNotEmpty() -> {
+            {
+                val next = ac.copy(power = !ac.power)
+                acButtonFor(acButtons, next)?.let { b ->
+                    if (deps.ir.send(b)) {
+                        ac = next
+                        AcMemory.save(context, device.id, next)
+                    }
+                }
+            }
+        }
+        else -> buttons?.let { all ->
+            (all.firstOrNull { it.funcKey == "POWER" } ?: all.firstOrNull { it.funcKey == "POWER_ON" })?.let { b -> { deps.ir.send(b); Unit } }
+        }
+    }
+    val isAc = acButtons.isNotEmpty()
+    val status = when {
+        isAc && ac.power -> "Đang bật · ${acModeLabel(ac.mode)}${if (ac.mode != "fan") " ${ac.temp}°" else ""}"
+        isAc -> "Đang tắt · ${device.brandName}"
+        else -> "${device.brandName} · ${style.name}"
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(3.dp, RoundedCornerShape(26.dp), spotColor = palette.shadow, ambientColor = palette.shadow)
+            .clip(RoundedCornerShape(26.dp))
+            .background(palette.body)
+            .clickable(onClick = onOpen)
+            .padding(start = 14.dp, top = 14.dp, bottom = 14.dp, end = 4.dp),
+    ) {
+        CategoryBadge(style, 52.dp)
+        Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
+            Text(device.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isAc && ac.power) style.accent else palette.inkSoft,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (power != null) {
+            val on = isAc && ac.power
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    // Solid red only for an A/C known to be running; other devices have no known state.
+                    .background(if (on) palette.power else palette.groove)
+                    .clickable(onClickLabel = "Bật/tắt ${device.name}", onClick = power),
+            ) {
+                Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Nguồn",
+                    tint = when { on -> Color.White; isAc -> palette.inkSoft; else -> palette.power }, modifier = Modifier.size(24.dp))
+            }
+        }
+        Box {
+            IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, "Tùy chọn", tint = palette.inkSoft) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Đổi tên") }, onClick = { menu = false; onRename() })
+                DropdownMenuItem(text = { Text("Xóa", color = palette.power) }, onClick = { menu = false; onDelete() })
+            }
+        }
     }
 }
 

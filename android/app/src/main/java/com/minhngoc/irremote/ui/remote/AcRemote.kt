@@ -93,6 +93,28 @@ data class AcState(
     }
 }
 
+/** The phone cannot read the unit, so the last state sent is remembered per device. */
+object AcMemory {
+    private fun prefs(context: Context) = context.getSharedPreferences("ac_state", Context.MODE_PRIVATE)
+    fun load(context: Context, deviceId: Long): AcState =
+        AcState.parse(prefs(context).getString("device_$deviceId", null)) ?: AcState(power = false)
+    fun save(context: Context, deviceId: Long, state: AcState) =
+        prefs(context).edit().putString("device_$deviceId", state.key).apply()
+}
+
+/** A/C state buttons ("AC" plus per-state "off") of a codeset; empty for non-A/C codesets. */
+fun acStateButtons(all: List<IrButton>): List<IrButton> =
+    all.filter { it.funcKey == "AC" || (it.funcKey == "POWER_OFF" && it.params?.startsWith("power=0") == true) }
+
+/** The button that best encodes [state]; codesets without per-state "off" frames only have a plain power=0. */
+fun acButtonFor(byState: Map<String, IrButton>, state: AcState): IrButton? =
+    byState[state.key]
+        ?: byState[state.copy(swing = false).key]
+        ?: byState[state.copy(swing = false, fan = "auto").key]
+        ?: (if (!state.power) byState["power=0"] else null)
+
+fun acModeLabel(mode: String): String = MODES.firstOrNull { it.key == mode }?.label ?: mode
+
 private const val MIN_TEMP = 16
 private const val MAX_TEMP = 30
 private const val ARC_START = 135f
@@ -111,8 +133,7 @@ private val FANS = listOf("auto" to "Tự động", "low" to "Thấp", "medium" 
 
 /**
  * State-based A/C control for codesets generated from IRremoteESP8266: each
- * change sends the complete state, like a real A/C remote. The phone cannot
- * read the unit, so the last state sent is remembered per device.
+ * change sends the complete state, like a real A/C remote.
  */
 @Composable
 fun AcRemote(buttons: List<IrButton>, deviceId: Long) {
@@ -120,21 +141,15 @@ fun AcRemote(buttons: List<IrButton>, deviceId: Long) {
     val ir = LocalDeps.current.ir
     val palette = LocalPalette.current
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("ac_state", Context.MODE_PRIVATE) }
-    var state by remember { mutableStateOf(AcState.parse(prefs.getString("device_$deviceId", null)) ?: AcState(power = false)) }
+    var state by remember { mutableStateOf(AcMemory.load(context, deviceId)) }
     val modes = remember(byState) { MODES.filter { m -> byState.keys.any { it.contains("mode=${m.key},") } } }
     val mode = MODES.first { it.key == state.mode }
     val accent by animateColorAsState(if (state.power) mode.color else palette.inkSoft, label = "acAccent")
 
     fun apply(next: AcState) {
         state = next
-        prefs.edit().putString("device_$deviceId", next.key).apply()
-        // Codesets without per-state "off" frames only have a plain power=0.
-        val button = byState[next.key]
-            ?: byState[next.copy(swing = false).key]
-            ?: byState[next.copy(swing = false, fan = "auto").key]
-            ?: (if (!next.power) byState["power=0"] else null)
-            ?: return Toast.makeText(context, "Bộ mã không hỗ trợ tổ hợp này", Toast.LENGTH_SHORT).show()
+        AcMemory.save(context, deviceId, next)
+        val button = acButtonFor(byState, next) ?: return Toast.makeText(context, "Bộ mã không hỗ trợ tổ hợp này", Toast.LENGTH_SHORT).show()
         if (!ir.send(button)) Toast.makeText(context, "Điện thoại không có cổng hồng ngoại", Toast.LENGTH_SHORT).show()
     }
 

@@ -14,6 +14,7 @@
         android:theme="@style/Theme.IrRemote">
         <activity
             android:name=".MainActivity"
+            android:theme="@style/Theme.IrRemote.Starting"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize"
             android:exported="true">
             <intent-filter>

@@ -112,7 +112,7 @@ fun RemoteScreen(nav: Navigator, device: UserDevice) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = style.accent) }
             return@Column
         }
-        val acStates = all.filter { it.funcKey == "AC" || (it.funcKey == "POWER_OFF" && it.params?.startsWith("power=0") == true) }
+        val acStates = acStateButtons(all)
 
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),

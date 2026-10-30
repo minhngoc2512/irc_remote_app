@@ -9,11 +9,10 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.platform.LocalContext
 import com.minhngoc.irremote.data.Brand
 import com.minhngoc.irremote.data.Category
-import com.minhngoc.irremote.data.IrDatabase
 import com.minhngoc.irremote.data.UserDevice
+import com.minhngoc.irremote.data.IrDatabase
 import com.minhngoc.irremote.data.UserDevices
 import com.minhngoc.irremote.ir.IrTransmitter
 import com.minhngoc.irremote.ui.remote.RemoteScreen
@@ -49,11 +48,7 @@ fun <T> loadAsync(vararg keys: Any?, block: suspend () -> T): State<T?> =
     produceState<T?>(initialValue = null, *keys) { value = withContext(Dispatchers.IO) { block() } }
 
 @Composable
-fun IrApp() {
-    val context = LocalContext.current
-    val deps = remember {
-        AppDeps(IrDatabase.get(context), UserDevices.get(context), IrTransmitter(context))
-    }
+fun IrApp(deps: AppDeps) {
     val nav = remember { Navigator() }
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
 

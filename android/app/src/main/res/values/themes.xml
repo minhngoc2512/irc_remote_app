@@ -1,4 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.IrRemote" parent="android:Theme.Material.NoActionBar" />
+    <style name="Theme.IrRemote" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/room</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Shown by the system at launch until MainActivity has opened the code database. -->
+    <style name="Theme.IrRemote.Starting" parent="Theme.SplashScreen.IconBackground">
+        <item name="windowSplashScreenBackground">@color/room</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/launcher_background</item>
+        <item name="postSplashScreenTheme">@style/Theme.IrRemote</item>
+    </style>
 </resources>
