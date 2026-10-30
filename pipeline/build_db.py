@@ -21,7 +21,7 @@ from irc.normalize import CATEGORIES, BrandNames, button_key, infer_category
 from irc.sources import SOURCES, Codeset, iter_flipper, iter_irdb, iter_irremoteesp8266
 
 HERE = Path(__file__).resolve().parent
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 MAX_PATTERN_US = 2_000_000  # ConsumerIrManager.transmit() rejects patterns longer than 2 s
 SOURCE_PRIORITY = {"flipper": 0, "irremoteesp8266": 0, "irdb": 1, "flipper_converted": 2}
 # Matching-wizard order: curated, recently captured codes first.
@@ -181,9 +181,9 @@ def write_db(args, kept: list[Entry], brands: BrandNames, wanted: set[str]):
         rank = (min(e.merged, 3) * 3 + has_power * 5 + min(len(keys), 15) / 3
                 + SOURCE_RANK_BONUS[e.cs.source] - 4 * e.inferred)
         cid = db.execute(
-            "INSERT INTO codesets(brand_id,category_id,name,source_id,source_path,category_inferred,button_count,rank)"
-            " VALUES(?,?,?,?,?,?,?,?)",
-            (brand_ids[e.brand], cat_ids[e.category], e.cs.name, source_ids[e.cs.source], e.cs.path,
+            "INSERT INTO codesets(uid,brand_id,category_id,name,source_id,source_path,category_inferred,button_count,rank)"
+            " VALUES(?,?,?,?,?,?,?,?,?)",
+            (f"{e.cs.source}:{e.cs.path}:{e.brand}", brand_ids[e.brand], cat_ids[e.category], e.cs.name, source_ids[e.cs.source], e.cs.path,
              int(e.inferred), len(e.buttons), round(rank, 2))).lastrowid
         db.executemany(
             "INSERT INTO buttons(codeset_id,func_key,label,freq,pattern,repeat,protocol,params) VALUES(?,?,?,?,?,?,?,?)",

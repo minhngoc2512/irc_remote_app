@@ -8,6 +8,7 @@ data class Category(val id: Long, val key: String, val name: String, val codeset
 data class Brand(val id: Long, val name: String, val codesetCount: Int)
 data class Codeset(
     val id: Long,
+    val uid: String,
     val name: String,
     val brandName: String,
     val categoryKey: String,
@@ -52,12 +53,20 @@ class IrDatabase private constructor(private val db: SQLiteDatabase) {
 
     fun codeset(id: Long): Codeset? = queryCodesets("cs.id = ?", arrayOf(id.toString())).firstOrNull()
 
+    /** Codeset ids change whenever the database is rebuilt; saved devices are resolved by uid. */
+    fun codesetId(uid: String): Long? = db.rawQuery("SELECT id FROM codesets WHERE uid = ?", arrayOf(uid))
+        .use { c -> if (c.moveToFirst()) c.getLong(0) else null }
+
     private fun queryCodesets(where: String, args: Array<String>): List<Codeset> = db.rawQuery(
-        """SELECT cs.id, cs.name, b.name, c.key, s.name, cs.button_count
+        """SELECT cs.id, cs.uid, cs.name, b.name, c.key, s.name, cs.button_count
            FROM codesets cs JOIN brands b ON b.id = cs.brand_id JOIN categories c ON c.id = cs.category_id
            JOIN sources s ON s.id = cs.source_id WHERE $where""", args,
     ).use { c ->
-        buildList { while (c.moveToNext()) add(Codeset(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getInt(5))) }
+        buildList {
+            while (c.moveToNext()) {
+                add(Codeset(c.getLong(0), c.getString(1), c.getString(2), c.getString(3), c.getString(4), c.getString(5), c.getInt(6)))
+            }
+        }
     }
 
     fun buttons(codesetId: Long): List<IrButton> = db.rawQuery(

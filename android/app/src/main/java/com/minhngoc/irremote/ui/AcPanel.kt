@@ -1,16 +1,15 @@
 package com.minhngoc.irremote.ui
 
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -39,9 +38,23 @@ data class AcState(
     val fan: String = "auto",
     val swing: Boolean = false,
 ) {
+    /** Matches the "params" written by the pipeline, e.g. power=1,mode=cool,temp=25,fan=auto,swing=0. */
     val key: String
-        get() = if (!power) "power=0"
-        else "power=1,mode=$mode,temp=${if (mode == "fan") 0 else temp},fan=$fan,swing=${if (swing) 1 else 0}"
+        get() = "power=${if (power) 1 else 0},mode=$mode,temp=${if (mode == "fan") 0 else temp},fan=$fan," +
+            "swing=${if (swing) 1 else 0}"
+
+    companion object {
+        fun parse(key: String?): AcState? {
+            val f = key?.split(",")?.associate { it.substringBefore("=") to it.substringAfter("=") } ?: return null
+            return AcState(
+                power = f["power"] == "1",
+                mode = f["mode"] ?: return null,
+                temp = f["temp"]?.toIntOrNull()?.takeIf { it in 16..30 } ?: 25,
+                fan = f["fan"] ?: "auto",
+                swing = f["swing"] == "1",
+            )
+        }
+    }
 }
 
 private val MODES = listOf("cool" to "Lạnh", "heat" to "Sưởi", "dry" to "Hút ẩm", "fan" to "Quạt", "auto" to "Tự động")
@@ -54,17 +67,22 @@ private val FANS = listOf("auto" to "Tự động", "low" to "Thấp", "medium" 
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AcPanel(buttons: List<IrButton>) {
+fun AcPanel(buttons: List<IrButton>, deviceId: Long) {
     val byState = remember(buttons) { buttons.filter { it.params != null }.associateBy { it.params!! } }
     val ir = LocalDeps.current.ir
     val context = LocalContext.current
-    var state by remember { mutableStateOf(AcState()) }
+    // The phone cannot read the A/C, so remember the last state sent to this device.
+    val prefs = remember { context.getSharedPreferences("ac_state", Context.MODE_PRIVATE) }
+    var state by remember { mutableStateOf(AcState.parse(prefs.getString("device_$deviceId", null)) ?: AcState(power = false)) }
 
     fun apply(next: AcState) {
         state = next
+        prefs.edit().putString("device_$deviceId", next.key).apply()
+        // Codesets without per-state "off" frames only have a plain power=0.
         val button = byState[next.key]
             ?: byState[next.copy(swing = false).key]
             ?: byState[next.copy(swing = false, fan = "auto").key]
+            ?: (if (!next.power) byState["power=0"] else null)
             ?: return Toast.makeText(context, "Bộ mã không hỗ trợ tổ hợp này", Toast.LENGTH_SHORT).show()
         if (!ir.send(button)) Toast.makeText(context, "Không phát được tín hiệu hồng ngoại", Toast.LENGTH_SHORT).show()
     }
@@ -74,18 +92,25 @@ fun AcPanel(buttons: List<IrButton>) {
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text(
+                when {
+                    !state.power -> "Đã tắt · ${state.temp}°C"
+                    state.mode == "fan" -> "Quạt"
+                    else -> "${state.temp}°C"
+                },
+                style = MaterialTheme.typography.displayMedium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Button(
-                    onClick = { apply(state.copy(power = !state.power)) },
-                    shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = if (state.power) Color(0xFF2E7D32) else Color(0xFFE5484D)),
-                    contentPadding = PaddingValues(0.dp),
-                    modifier = Modifier.size(72.dp),
-                ) { Text(if (state.power) "BẬT" else "TẮT", maxLines = 1) }
-                Text(
-                    if (state.power && state.mode != "fan") "${state.temp}°C" else if (state.power) "Quạt" else "—",
-                    style = MaterialTheme.typography.displayMedium,
-                )
+                    onClick = { apply(state.copy(power = true)) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                    modifier = Modifier.weight(1f).height(56.dp),
+                ) { Text("BẬT") }
+                Button(
+                    onClick = { apply(state.copy(power = false)) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5484D)),
+                    modifier = Modifier.weight(1f).height(56.dp),
+                ) { Text("TẮT") }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {

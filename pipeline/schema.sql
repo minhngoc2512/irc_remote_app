@@ -28,7 +28,8 @@ CREATE TABLE brands (
 );
 
 CREATE TABLE codesets (
-    id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY,           -- changes between builds; apps should store uid
+    uid TEXT NOT NULL UNIQUE,          -- stable: source:source_path:brand
     brand_id INTEGER NOT NULL REFERENCES brands(id),
     category_id INTEGER NOT NULL REFERENCES categories(id),
     name TEXT NOT NULL,                -- model / remote name from the source

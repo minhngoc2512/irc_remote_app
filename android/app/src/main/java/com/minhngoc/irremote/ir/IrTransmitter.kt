@@ -6,30 +6,49 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 import com.minhngoc.irremote.data.IrButton
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
-/** Thin wrapper over ConsumerIrManager that sends buttons from the code database. */
+/**
+ * Thin wrapper over ConsumerIrManager that sends buttons from the code database.
+ *
+ * transmit() blocks for as long as the signal lasts (≈ 0.4 s for an A/C state),
+ * so signals are sent on one background thread, in the order they were pressed.
+ */
 class IrTransmitter(context: Context) {
     private val ir = context.getSystemService(Context.CONSUMER_IR_SERVICE) as ConsumerIrManager?
     private val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator?
+    private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "ir-transmit") }
+    private val repeatPending = AtomicBoolean(false)
 
     val available: Boolean = ir?.hasIrEmitter() == true
 
-    /** Sends one short press. Returns false if the phone cannot transmit it. */
-    fun send(button: IrButton, haptic: Boolean = true): Boolean = transmit(button.freq, button.pattern, haptic)
-
-    /** Sends the hold-to-repeat frame (falls back to the full press pattern). */
-    fun sendRepeat(button: IrButton): Boolean = transmit(button.freq, button.repeat ?: button.pattern, false)
-
-    private fun transmit(freq: Int, pattern: IntArray, haptic: Boolean): Boolean {
-        val manager = ir ?: return false
-        if (!available || pattern.isEmpty()) return false
+    /** Queues one short press. Returns false if the phone cannot transmit at all. */
+    fun send(button: IrButton, haptic: Boolean = true): Boolean {
+        if (!available || button.pattern.isEmpty()) return false
         if (haptic) vibrator?.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
-        return try {
+        worker.execute { transmit(button.freq, button.pattern) }
+        return true
+    }
+
+    /** Queues the hold-to-repeat frame unless the previous one is still waiting, so holds never pile up. */
+    fun sendRepeat(button: IrButton): Boolean {
+        if (!available) return false
+        if (repeatPending.compareAndSet(false, true)) {
+            worker.execute {
+                repeatPending.set(false)
+                transmit(button.freq, button.repeat ?: button.pattern)
+            }
+        }
+        return true
+    }
+
+    private fun transmit(freq: Int, pattern: IntArray) {
+        val manager = ir ?: return
+        try {
             manager.transmit(supportedFrequency(manager, freq), pattern)
-            true
         } catch (e: RuntimeException) {
             Log.w(TAG, "transmit failed at $freq Hz, ${pattern.size} timings", e)
-            false
         }
     }
 

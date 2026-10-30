@@ -260,7 +260,8 @@ fun MatchScreen(nav: Navigator, category: Category, brand: Brand) {
             Text("Hướng điện thoại về thiết bị và bấm thử các nút dưới đây:")
 
             val all = buttons.orEmpty()
-            val acTests = listOf(AcState().key, "power=0").mapNotNull { p -> all.firstOrNull { it.params == p } }
+            val acTests = listOf(AcState().key, AcState(power = false).key, "power=0")
+                .mapNotNull { p -> all.firstOrNull { it.params == p } }.take(2)
             val tests = acTests.ifEmpty {
                 (TEST_KEYS.mapNotNull { k -> all.firstOrNull { it.funcKey == k } } + all).distinct().take(4)
             }

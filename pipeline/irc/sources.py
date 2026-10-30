@@ -193,8 +193,8 @@ def _ac_remote_hints(src: Path) -> dict[tuple[str, str], list[str]]:
     return hints
 
 
-def _panasonic_patch(timings: list[int], byte_index: int, value: int) -> list[int]:
-    """Rewrite one byte of a Panasonic A/C data frame and fix its checksum (sum of bytes mod 256).
+def _panasonic_edit(timings: list[int], edit) -> list[int]:
+    """Apply edit(data_bytes) to a Panasonic A/C data frame and fix its checksum (sum of bytes mod 256).
 
     Panasonic frames: header mark > 2500 µs, then pulse-distance bits LSB first;
     the data frame is the last one and its final byte is the checksum.
@@ -209,7 +209,7 @@ def _panasonic_patch(timings: list[int], byte_index: int, value: int) -> list[in
     spaces = frames[-1]
     zero, one = min(t[i] for i in spaces), max(t[i] for i in spaces)
     data = [sum((t[spaces[b * 8 + k]] > (zero + one) / 2) << k for k in range(8)) for b in range(len(spaces) // 8)]
-    data[byte_index] = value
+    edit(data)
     data[-1] = sum(data[:-1]) & 0xFF
     for b, byte in enumerate(data):
         for k in range(8):
@@ -217,10 +217,21 @@ def _panasonic_patch(timings: list[int], byte_index: int, value: int) -> list[in
     return t
 
 
+def _set_byte(index: int, value: int):
+    def edit(data: list[int]):
+        data[index] = value
+    return edit
+
+
+def _panasonic_power_off(data: list[int]):
+    data[5] &= ~0x01  # power bit; mode, temperature and fan stay as they were
+
+
 # Real captures of Vietnamese "nanoe-G" inverter remotes (Flipper-IRDB
 # Panasonic_CWA75C4179.ir) match RKR except data byte 15 = 0x81 instead of 0x89.
+# Like the real remote, "off" keeps the current settings and only clears the power bit.
 _DERIVED_AC = {
-    "PANASONIC_AC#A75C4xxx": ("PANASONIC_AC#RKR", lambda t: _panasonic_patch(t, 15, 0x81),
+    "PANASONIC_AC#A75C4xxx": ("PANASONIC_AC#RKR", _set_byte(15, 0x81), _panasonic_power_off,
                               "remote nanoe-G A75C4xxx (A75C4179, A75C4187…)"),
 }
 
@@ -248,13 +259,17 @@ def iter_irremoteesp8266(lib_root: Path, states_tsv: Path) -> Iterator[Codeset]:
             label=label, signal=Signal(int(freq), t, t), protocol=f"IRremoteESP8266:{proto}", params=params,
             func_key="POWER_OFF" if params == "power=0" else "AC"))
 
-    for derived, (parent, patch, hint) in _DERIVED_AC.items():
+    for derived, (parent, patch, power_off, hint) in _DERIVED_AC.items():
         if parent in by_proto:
             by_proto[derived] = []
+            protocol = f"IRremoteESP8266:{derived}"
             for b in by_proto[parent]:
-                t = patch(b.signal.intro)
-                by_proto[derived].append(Button(b.label, Signal(b.signal.freq, t, t), b.protocol.replace(parent.split("#")[1], derived.split("#")[1]),
-                                                b.params, func_key=b.func_key))
+                t = _panasonic_edit(b.signal.intro, patch)
+                by_proto[derived].append(Button(b.label, Signal(b.signal.freq, t, t), protocol, b.params, func_key=b.func_key))
+                if b.params.startswith("power=1,"):
+                    off = _panasonic_edit(t, power_off)
+                    by_proto[derived].append(Button(f"Tắt ({b.label})", Signal(b.signal.freq, off, off), protocol,
+                                                    "power=0," + b.params[len("power=1,"):], func_key="POWER_OFF"))
             base, _, model = derived.partition("#")
             hints[(base, model.upper())] = [hint]
             # Matched against real captures, so offer it before the generic models.

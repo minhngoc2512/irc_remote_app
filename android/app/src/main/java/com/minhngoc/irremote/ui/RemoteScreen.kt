@@ -105,7 +105,10 @@ fun RemoteKey(
 @Composable
 fun RemoteScreen(nav: Navigator, device: UserDevice) {
     val deps = LocalDeps.current
-    val buttons by loadAsync(device.codesetId) { deps.db.buttons(device.codesetId) }
+    val buttons by loadAsync(device.id) {
+        val codesetId = device.codesetUid?.let { deps.db.codesetId(it) } ?: device.codesetId
+        deps.db.buttons(codesetId)
+    }
 
     AppScaffold(device.name, nav) { padding ->
         val all = buttons ?: return@AppScaffold Loading(padding)
@@ -129,9 +132,9 @@ fun RemoteScreen(nav: Navigator, device: UserDevice) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             NoEmitterBanner()
-            val acStates = all.filter { it.funcKey == "AC" || (it.funcKey == "POWER_OFF" && it.params == "power=0") }
+            val acStates = all.filter { it.funcKey == "AC" || (it.funcKey == "POWER_OFF" && it.params?.startsWith("power=0") == true) }
             if (acStates.isNotEmpty()) {
-                AcPanel(acStates)
+                AcPanel(acStates, device.id)
                 used += acStates.map { it.id }
                 return@Column
             }
