@@ -23,11 +23,15 @@ class IrTransmitter(context: Context) {
 
     val available: Boolean = ir?.hasIrEmitter() == true
 
+    init {
+        Log.i(TAG, "emitter=$available carriers=" + ir?.carrierFrequencies?.joinToString { "${it.minFrequency}-${it.maxFrequency}" })
+    }
+
     /** Queues one short press. Returns false if the phone cannot transmit at all. */
     fun send(button: IrButton, haptic: Boolean = true): Boolean {
         if (!available || button.pattern.isEmpty()) return false
         if (haptic) vibrator?.vibrate(VibrationEffect.createOneShot(20, VibrationEffect.DEFAULT_AMPLITUDE))
-        worker.execute { transmit(button.freq, button.pattern) }
+        worker.execute { transmit(button.freq, button.pattern, "${button.label} [${button.params ?: button.funcKey}]") }
         return true
     }
 
@@ -37,16 +41,18 @@ class IrTransmitter(context: Context) {
         if (repeatPending.compareAndSet(false, true)) {
             worker.execute {
                 repeatPending.set(false)
-                transmit(button.freq, button.repeat ?: button.pattern)
+                transmit(button.freq, button.repeat ?: button.pattern, "${button.label} (repeat)")
             }
         }
         return true
     }
 
-    private fun transmit(freq: Int, pattern: IntArray) {
+    private fun transmit(freq: Int, pattern: IntArray, what: String) {
         val manager = ir ?: return
         try {
-            manager.transmit(supportedFrequency(manager, freq), pattern)
+            val carrier = supportedFrequency(manager, freq)
+            Log.i(TAG, "send $what: $carrier Hz, ${pattern.size} timings, ${pattern.sum() / 1000} ms")
+            manager.transmit(carrier, pattern)
         } catch (e: RuntimeException) {
             Log.w(TAG, "transmit failed at $freq Hz, ${pattern.size} timings", e)
         }
