@@ -296,6 +296,8 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
             onDispose { client.disconnect() }
         }
         val volume by client.volume.collectAsState()
+        val context = LocalContext.current
+        var navMode by remember { mutableStateOf(NavModePref.load(context)) }
         val sender = remember(client) {
             object : KeySender {
                 override fun press(key: KeySpec): Boolean = client.sendKey((key as AtvKey).keyCode)
@@ -309,10 +311,16 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
                 Spacer(Modifier.weight(1f))
                 listOf(k("INPUT"), k("MUTE")).forEach { IrKey(it, Modifier.padding(start = 10.dp).size(52.dp), shape = CircleShape) }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Rocker("Âm lượng", k("VOL_UP"), k("VOL_DOWN"), width = 58.dp, captionIcon = Icons.AutoMirrored.Filled.VolumeUp)
-                DPad(k("UP"), k("DOWN"), k("LEFT"), k("RIGHT"), k("OK"), style.accent, size = 172.dp)
-                Rocker("Kênh", k("CH_UP"), k("CH_DOWN"), width = 58.dp)
+            // Navigation on its own row, away from volume/channel, so thumbs don't hit the wrong key.
+            NavModeSwitch(navMode, style.accent) { navMode = it; NavModePref.save(context, it) }
+            if (navMode == NavMode.Keys) {
+                DPad(k("UP"), k("DOWN"), k("LEFT"), k("RIGHT"), k("OK"), style.accent, size = 230.dp)
+            } else {
+                Touchpad(client, style.accent)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                HRocker("Âm lượng", k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f))
+                HRocker("Kênh", k("CH_DOWN"), k("CH_UP"), Modifier.weight(1f))
             }
             // Boxes that pass audio over HDMI report 0/0: nothing useful to show.
             volume?.takeIf { it.max > 0 }?.let { v ->
