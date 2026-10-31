@@ -62,6 +62,8 @@ import com.minhngoc.irremote.atv.AtvPairing
 import com.minhngoc.irremote.atv.AtvRemote
 import com.minhngoc.irremote.atv.FoundTv
 import com.minhngoc.irremote.data.KeySpec
+import com.minhngoc.irremote.net.Latency
+import kotlin.math.roundToInt
 import com.minhngoc.irremote.data.UserDevice
 import com.minhngoc.irremote.ui.AppScaffold
 import com.minhngoc.irremote.ui.LocalDeps
@@ -287,7 +289,7 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
 
     RemoteFrame(nav, device.name, "Android TV · $host", style, loading = client == null, above = {
         client?.let { ConnectionBanner(it, onRepair = { nav.push(Screen.AtvAdd) }) }
-    }) {
+    }, headerEnd = { LatencyChip(host) }) {
         client ?: return@RemoteFrame
         DisposableEffect(client) {
             client.connect()
@@ -312,7 +314,8 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
                 DPad(k("UP"), k("DOWN"), k("LEFT"), k("RIGHT"), k("OK"), style.accent, size = 172.dp)
                 Rocker("Kênh", k("CH_UP"), k("CH_DOWN"), width = 58.dp)
             }
-            volume?.let { v ->
+            // Boxes that pass audio over HDMI report 0/0: nothing useful to show.
+            volume?.takeIf { it.max > 0 }?.let { v ->
                 Text(
                     if (v.muted) "Đang tắt tiếng" else "Âm lượng ${v.level} / ${v.max}",
                     style = MaterialTheme.typography.labelMedium, color = palette.inkSoft,
@@ -369,14 +372,39 @@ private fun ConnectionBanner(client: AtvRemote, onRepair: () -> Unit) {
     val (text, color) = when (state) {
         AtvRemote.State.Connected -> return
         AtvRemote.State.Idle, AtvRemote.State.Connecting -> "Đang kết nối tới TV…" to palette.inkSoft
-        AtvRemote.State.Unreachable -> "Không thấy TV. Kiểm tra TV đang bật và cùng Wi-Fi với điện thoại." to palette.power
+        AtvRemote.State.Unreachable -> "Chưa kết nối được tới TV. Kiểm tra TV đang bật và cùng Wi-Fi với điện thoại; app sẽ tự thử lại." to palette.power
         AtvRemote.State.NotPaired -> "TV chưa ghép nối với điện thoại này." to palette.power
     }
+    val error by client.lastError.collectAsState()
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(16.dp)).background(palette.body).padding(14.dp),
     ) {
-        Text(text, style = MaterialTheme.typography.bodySmall, color = color, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+            error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = palette.inkSoft, modifier = Modifier.padding(top = 4.dp)) }
+        }
         if (state == AtvRemote.State.NotPaired) TextButton(onClick = onRepair) { Text("Ghép nối lại") }
+    }
+}
+
+/** Live round-trip time to a network device, refreshed every few seconds. */
+@Composable
+fun LatencyChip(host: String) {
+    val palette = LocalPalette.current
+    val rtt by remember(host) { Latency.monitor(host) }.collectAsState(initial = Float.NaN)
+    val (label, dot) = when {
+        rtt?.isNaN() == true -> "…" to palette.inkSoft
+        rtt == null -> "mất kết nối" to palette.power
+        rtt!! < 50f -> "${rtt!!.roundToInt()} ms" to Color(0xFF30A46C)
+        rtt!! < 150f -> "${rtt!!.roundToInt()} ms" to Color(0xFFE8A800)
+        else -> "${rtt!!.roundToInt()} ms" to palette.power
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clip(CircleShape).background(palette.body).padding(horizontal = 10.dp, vertical = 6.dp),
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
+        Text(label, style = MaterialTheme.typography.labelMedium, color = palette.inkSoft, modifier = Modifier.padding(start = 6.dp))
     }
 }

@@ -32,6 +32,9 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
     val state: StateFlow<State> = _state
     private val _volume = MutableStateFlow<Volume?>(null)
     val volume: StateFlow<Volume?> = _volume
+    /** Last connection error, shown under the status so failures can be diagnosed on the phone. */
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError
     /** Package of the app in the foreground on the TV, when it reports one. */
     private val _currentApp = MutableStateFlow<String?>(null)
     val currentApp: StateFlow<String?> = _currentApp
@@ -59,7 +62,8 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
                     session()
                     attempt = 0
                 } catch (e: Exception) {
-                    Log.w(TAG, "connection to $host lost: ${e.message}")
+                    Log.e(TAG, "connection to $host lost (talked=$talked tcp=$tcpOpen)", e)
+                    _lastError.value = "${e.javaClass.simpleName}: ${e.message} (tcp=$tcpOpen, talked=$talked)"
                     // A TV that has not paired with our certificate fails the TLS handshake or
                     // hangs up before saying anything; an unreachable one never accepts TCP.
                     if (e is SSLHandshakeException || (tcpOpen && !talked)) rejected++
@@ -125,25 +129,26 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
 
     private fun session() {
         tcpOpen = false
-        val s = (identity.sslContext.socketFactory.createSocket() as SSLSocket).apply {
-            socket = this
-            connect(InetSocketAddress(host, port), 4_000)
-            tcpOpen = true
-            soTimeout = 20_000 // the TV pings about every 5 s
-            startHandshake()
-        }
+        // Not inside apply {}: there `port` would silently resolve to SSLSocket.port (0 before connecting).
+        val s = identity.sslContext.socketFactory.createSocket() as SSLSocket
+        socket = s
+        s.connect(InetSocketAddress(host, port), 4_000)
+        tcpOpen = true
+        s.soTimeout = 20_000 // the TV pings about every 5 s
+        s.startHandshake()
         out = s.outputStream
         val input = s.inputStream
         while (true) {
             val msg = ProtoMessage.parse(input.readFrame())
             talked = true
+            _lastError.value = null
             when {
                 msg.has(1) -> { // remote_configure: answer with the features both sides support
                     val supported = msg.message(1)?.long(1) ?: FEATURES
                     reply(ProtoWriter().message(1) {
                         varint(1, FEATURES and supported)
                         message(2) {
-                            string(1, android.os.Build.MODEL); string(2, android.os.Build.MANUFACTURER)
+                            string(1, android.os.Build.MODEL ?: "Android"); string(2, android.os.Build.MANUFACTURER ?: "Android")
                             varint(3, 1); string(4, "1"); string(5, "atvremote"); string(6, "1.0.0")
                         }
                     })

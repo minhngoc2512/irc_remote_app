@@ -141,6 +141,7 @@ fun RemoteFrame(
     style: DeviceStyle,
     loading: Boolean = false,
     above: @Composable () -> Unit = { NoEmitterBanner() },
+    headerEnd: @Composable () -> Unit = {},
     body: @Composable ColumnScope.() -> Unit,
 ) {
     val palette = LocalPalette.current
@@ -155,6 +156,7 @@ fun RemoteFrame(
                     Text(title, style = MaterialTheme.typography.titleLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(subtitle, style = MaterialTheme.typography.bodySmall, color = palette.inkSoft, maxLines = 1)
                 }
+                headerEnd()
             }
             if (loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = style.accent) }
