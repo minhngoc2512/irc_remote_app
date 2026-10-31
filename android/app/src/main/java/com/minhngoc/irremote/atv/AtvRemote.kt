@@ -111,6 +111,38 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
 
     enum class Direction(val wire: Long) { START_LONG(1), END_LONG(2), SHORT(3) }
 
+    // --- Voice: the TV's assistant listens to audio streamed from the phone -------------------
+
+    @Volatile private var voiceBegin: kotlinx.coroutines.CompletableDeferred<Long>? = null
+
+    /**
+     * Opens a voice session: presses SEARCH, waits for the TV's remote_voice_begin and
+     * echoes it back. Returns the session id for [sendVoice] / [endVoice], or null if
+     * the TV did not open one (no assistant, or voice not supported).
+     */
+    suspend fun startVoice(): Long? {
+        val begin = kotlinx.coroutines.CompletableDeferred<Long>()
+        voiceBegin = begin
+        sendKey(KEYCODE_SEARCH)
+        val id = kotlinx.coroutines.withTimeoutOrNull(4_000) { begin.await() }
+        voiceBegin = null
+        if (id != null) write(ProtoWriter().message(30) { varint(1, id) })
+        return id
+    }
+
+    /** Streams PCM 16-bit mono 8 kHz audio; pieces are split/padded to the sizes the TV accepts. */
+    fun sendVoice(sessionId: Long, pcm: ByteArray) {
+        var i = 0
+        while (i < pcm.size) {
+            var piece = pcm.copyOfRange(i, minOf(i + VOICE_CHUNK_MAX, pcm.size))
+            if (piece.size < VOICE_CHUNK_MIN) piece = piece.copyOf(VOICE_CHUNK_MIN) // zero padding
+            write(ProtoWriter().message(31) { varint(1, sessionId); bytes(2, piece) })
+            i += VOICE_CHUNK_MAX
+        }
+    }
+
+    fun endVoice(sessionId: Long) = write(ProtoWriter().message(32) { varint(1, sessionId) })
+
     private fun write(message: ProtoWriter): Boolean {
         val body = message.toByteArray()
         if (_state.value != State.Connected) connect()
@@ -162,6 +194,7 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
                 msg.has(20) -> _currentApp.value = msg.message(20)?.message(1)?.string(12)
                 msg.has(21) -> msg.message(21)?.let { imeCounter = it.int(1); fieldCounter = it.int(2) }
                 msg.has(40) -> _state.value = State.Connected
+                msg.has(30) -> voiceBegin?.complete(msg.message(30)?.long(1) ?: 0)
                 msg.has(3) -> Log.w(TAG, "TV reported an error")
             }
         }
@@ -180,8 +213,11 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
 
     companion object {
         private const val TAG = "AtvRemote"
-        // PING | KEY | IME | POWER | VOLUME | APP_LINK
-        private const val FEATURES = 1L or 2L or 4L or 32L or 64L or 512L
+        private const val KEYCODE_SEARCH = 84
+        // PING | KEY | IME | VOICE | POWER | VOLUME | APP_LINK
+        private const val FEATURES = 1L or 2L or 4L or 8L or 32L or 64L or 512L
+        private const val VOICE_CHUNK_MIN = 8 * 1024
+        private const val VOICE_CHUNK_MAX = 20 * 1024
 
         private val clients = ConcurrentHashMap<String, AtvRemote>()
 

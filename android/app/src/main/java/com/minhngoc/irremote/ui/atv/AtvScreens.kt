@@ -321,6 +321,7 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
                     style = MaterialTheme.typography.labelMedium, color = palette.inkSoft,
                 )
             }
+            HoldToTalk(client, style.accent)
             KeyRow(listOf(k("BACK"), k("HOME"), k("SETTINGS")))
             KeyRow(listOf(k("PREV"), k("REWIND"), k("PLAY_PAUSE"), k("FAST_FORWARD"), k("NEXT")))
 
@@ -359,9 +360,13 @@ private fun TypeToTv(client: AtvRemote) {
             keyboardActions = KeyboardActions(onSend = { send() }),
             modifier = Modifier.weight(1f),
         )
-        IconButton(onClick = ::send, enabled = text.isNotEmpty()) { Icon(Icons.AutoMirrored.Filled.Send, "Gửi") }
+        if (text.isEmpty()) {
+            DictateButton { spoken -> client.sendText(spoken) }
+        } else {
+            IconButton(onClick = ::send) { Icon(Icons.AutoMirrored.Filled.Send, "Gửi") }
+        }
     }
-    Text("Mở ô tìm kiếm trên TV trước, rồi gõ ở đây.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
+    Text("Mở ô tìm kiếm trên TV trước, rồi gõ hoặc bấm micro để đọc chữ.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
         modifier = Modifier.fillMaxWidth())
 }
 

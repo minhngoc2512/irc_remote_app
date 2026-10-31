@@ -49,6 +49,14 @@ class AtvControlProbe {
         assertEquals("state (last error: ${remote.lastError.value})", AtvRemote.State.Connected, remote.state.value)
         Thread.sleep(1_000)
         println("volume=${remote.volume.value}")
+        if (System.getenv("ATV_VOICE") != null) {
+            val session = kotlinx.coroutines.runBlocking { remote.startVoice() }
+            println("voice session=$session")
+            org.junit.Assert.assertNotNull("TV did not open a voice session", session)
+            remote.sendVoice(session!!, ByteArray(16_000)) // 1 s of silence
+            remote.endVoice(session)
+            Thread.sleep(1_500)
+        }
         remote.disconnect()
     }
 
