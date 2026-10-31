@@ -46,8 +46,6 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
     @Volatile private var out: OutputStream? = null
     @Volatile private var tcpOpen = false
     @Volatile private var talked = false
-    @Volatile private var imeCounter = 0
-    @Volatile private var fieldCounter = 0
 
     /** Opens the connection if needed; safe to call repeatedly. */
     fun connect() {
@@ -95,16 +93,19 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
     /** Opens an app by deep link, e.g. "https://www.youtube.com" or "market://launch?id=<package>". */
     fun launchApp(link: String) = write(ProtoWriter().message(90) { string(1, link) })
 
-    /** Types into the text field focused on the TV (needs an on-screen keyboard to be open there). */
+    /**
+     * Sets the content of the text field focused on the TV (an on-screen keyboard must be
+     * open there). Each call replaces the whole field. Mi Box only accepts the zeroed
+     * counters / insert=0 / position 11 form documented with working byte dumps; the
+     * counters the TV reports in remote_ime_batch_edit get the edit ignored.
+     */
     fun sendText(text: String) {
-        if (text.isEmpty()) return
-        val pos = (text.length - 1).toLong()
         write(ProtoWriter().message(21) {
-            varint(1, imeCounter.toLong())
-            varint(2, fieldCounter.toLong())
+            varint(1, 0)
+            varint(2, 0)
             message(3) {
-                varint(1, 1)
-                message(2) { varint(1, pos); varint(2, pos); string(3, text) }
+                varint(1, 0)
+                message(2) { varint(1, 11); varint(2, 11); string(3, text) }
             }
         })
     }
@@ -192,7 +193,6 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
                 msg.has(8) -> reply(ProtoWriter().message(9) { varint(1, msg.message(8)?.long(1) ?: 0) }) // ping
                 msg.has(50) -> msg.message(50)?.let { v -> _volume.value = Volume(v.int(7), v.int(6), v.bool(8)) }
                 msg.has(20) -> _currentApp.value = msg.message(20)?.message(1)?.string(12)
-                msg.has(21) -> msg.message(21)?.let { imeCounter = it.int(1); fieldCounter = it.int(2) }
                 msg.has(40) -> _state.value = State.Connected
                 msg.has(30) -> voiceBegin?.complete(msg.message(30)?.long(1) ?: 0)
                 msg.has(3) -> Log.w(TAG, "TV reported an error")

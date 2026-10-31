@@ -347,27 +347,29 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
 private fun TypeToTv(client: AtvRemote) {
     val palette = LocalPalette.current
     var text by remember { mutableStateOf("") }
-    fun send() {
+    var edited by remember { mutableStateOf(false) }
+    // The TV field mirrors this one once the user types: every change replaces the TV text.
+    LaunchedEffect(text) {
+        if (!edited) return@LaunchedEffect // don't wipe what is already on the TV
+        kotlinx.coroutines.delay(150)
         client.sendText(text)
-        text = ""
     }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         OutlinedTextField(
-            value = text, onValueChange = { text = it }, singleLine = true,
+            value = text, onValueChange = { text = it; edited = true }, singleLine = true,
             leadingIcon = { Icon(Icons.Filled.Keyboard, null, tint = palette.inkSoft) },
             placeholder = { Text("Gõ chữ lên TV") },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(onSend = { send() }),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { client.sendKey(KeyEvent.KEYCODE_ENTER) }),
             modifier = Modifier.weight(1f),
         )
-        if (text.isEmpty()) {
-            DictateButton { spoken -> client.sendText(spoken) }
-        } else {
-            IconButton(onClick = ::send) { Icon(Icons.AutoMirrored.Filled.Send, "Gửi") }
+        DictateButton { spoken -> text = spoken; edited = true }
+        IconButton(onClick = { client.sendKey(KeyEvent.KEYCODE_ENTER) }, enabled = text.isNotEmpty()) {
+            Icon(Icons.AutoMirrored.Filled.Send, "Tìm / Enter trên TV")
         }
     }
-    Text("Mở ô tìm kiếm trên TV trước, rồi gõ hoặc bấm micro để đọc chữ.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
-        modifier = Modifier.fillMaxWidth())
+    Text("Mở ô tìm kiếm trên TV trước. Chữ gõ hoặc đọc ở đây hiện ngay trên TV, bấm gửi để tìm.",
+        style = MaterialTheme.typography.bodySmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
 }
 
 @Composable
