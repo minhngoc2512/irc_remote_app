@@ -291,9 +291,23 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
         client?.let { ConnectionBanner(it, onRepair = { nav.push(Screen.AtvAdd) }) }
     }, headerEnd = { LatencyChip(host) }) {
         client ?: return@RemoteFrame
-        DisposableEffect(client) {
-            client.connect()
-            onDispose { client.disconnect() }
+        // Hold the connection only while this screen is visible: a backgrounded app must not
+        // keep (or re-open) a session, the TV then routes keyboard events to the stale one.
+        val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+        DisposableEffect(client, lifecycle) {
+            var held = false
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                when (event) {
+                    androidx.lifecycle.Lifecycle.Event.ON_START -> if (!held) { held = true; client.acquire() }
+                    androidx.lifecycle.Lifecycle.Event.ON_STOP -> if (held) { held = false; client.release() }
+                    else -> Unit
+                }
+            }
+            lifecycle.addObserver(observer)
+            onDispose {
+                lifecycle.removeObserver(observer)
+                if (held) client.release()
+            }
         }
         val volume by client.volume.collectAsState()
         val context = LocalContext.current
@@ -376,8 +390,14 @@ private fun TypeToTv(client: AtvRemote) {
             Icon(Icons.AutoMirrored.Filled.Send, "Tìm / Enter trên TV")
         }
     }
-    Text("Mở ô tìm kiếm trên TV trước. Chữ gõ hoặc đọc ở đây hiện ngay trên TV, bấm gửi để tìm.",
-        style = MaterialTheme.typography.bodySmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
+    val fieldOpen by client.textFieldOpen.collectAsState()
+    Text(
+        if (fieldOpen) "TV đang mở ô nhập chữ: chữ gõ hoặc đọc ở đây hiện ngay trên TV."
+        else "Chưa thấy ô nhập chữ trên TV. Mở ô tìm kiếm trên TV để bàn phím ảo hiện lên.",
+        style = MaterialTheme.typography.bodySmall,
+        color = if (fieldOpen) Color(0xFF30A46C) else palette.inkSoft,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

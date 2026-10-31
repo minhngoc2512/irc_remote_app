@@ -47,6 +47,39 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
     @Volatile private var tcpOpen = false
     @Volatile private var talked = false
 
+    // --- Lifetime: connected only while a screen holds the client, or briefly after a one-off send.
+    @Volatile private var holders = 0
+    private var idleClose: Job? = null
+
+    /** A visible remote screen needs the connection. Pair with [release]. */
+    @Synchronized
+    fun acquire() {
+        holders++
+        idleClose?.cancel()
+        connect()
+    }
+
+    @Synchronized
+    fun release() {
+        holders = maxOf(0, holders - 1)
+        scheduleIdleClose()
+    }
+
+    /** One-off senders (home screen power key) keep the link only for a short while. */
+    @Synchronized
+    private fun scheduleIdleClose() {
+        if (holders > 0) return
+        idleClose?.cancel()
+        idleClose = scope.launch {
+            delay(IDLE_CLOSE_MS)
+            synchronized(this@AtvRemote) { if (holders == 0) disconnect() }
+        }
+    }
+
+    /** True while the TV reports a focused text field to this connection (IME messages). */
+    private val _textFieldOpen = MutableStateFlow(false)
+    val textFieldOpen: StateFlow<Boolean> = _textFieldOpen
+
     /** Opens the connection if needed; safe to call repeatedly. */
     fun connect() {
         if (readJob?.isActive == true) return
@@ -81,6 +114,7 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
     }
 
     fun disconnect() {
+        _textFieldOpen.value = false
         readJob?.cancel()
         readJob = null
         closeSocket()
@@ -100,6 +134,7 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
      * counters the TV reports in remote_ime_batch_edit get the edit ignored.
      */
     fun sendText(text: String) {
+        trace("-> text '$text' (state=${_state.value})")
         write(ProtoWriter().message(21) {
             varint(1, 0)
             varint(2, 0)
@@ -125,7 +160,9 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
         val begin = kotlinx.coroutines.CompletableDeferred<Long>()
         voiceBegin = begin
         sendKey(KEYCODE_SEARCH)
+        trace("-> voice: SEARCH (state=${_state.value})")
         val id = kotlinx.coroutines.withTimeoutOrNull(4_000) { begin.await() }
+        trace("voice session=$id")
         voiceBegin = null
         if (id != null) write(ProtoWriter().message(30) { varint(1, id) })
         return id
@@ -133,6 +170,7 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
 
     /** Streams PCM 16-bit mono 8 kHz audio; pieces are split/padded to the sizes the TV accepts. */
     fun sendVoice(sessionId: Long, pcm: ByteArray) {
+        trace("-> voice ${pcm.size} bytes")
         var i = 0
         while (i < pcm.size) {
             var piece = pcm.copyOfRange(i, minOf(i + VOICE_CHUNK_MAX, pcm.size))
@@ -142,11 +180,15 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
         }
     }
 
-    fun endVoice(sessionId: Long) = write(ProtoWriter().message(32) { varint(1, sessionId) })
+    fun endVoice(sessionId: Long): Boolean {
+        trace("-> voice end $sessionId")
+        return write(ProtoWriter().message(32) { varint(1, sessionId) })
+    }
 
     private fun write(message: ProtoWriter): Boolean {
         val body = message.toByteArray()
         if (_state.value != State.Connected) connect()
+        scheduleIdleClose()
         writer.execute {
             // Give a fresh connection a moment to finish its handshake before dropping the key.
             var waited = 0
@@ -172,7 +214,9 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
         out = s.outputStream
         val input = s.inputStream
         while (true) {
-            val msg = ProtoMessage.parse(input.readFrame())
+            val raw = input.readFrame()
+            val msg = ProtoMessage.parse(raw)
+            if (!msg.has(8)) trace("<- fields ${(1..100).filter { msg.has(it) }} ${raw.size}B")
             talked = true
             _lastError.value = null
             when {
@@ -192,13 +236,30 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
                 }
                 msg.has(8) -> reply(ProtoWriter().message(9) { varint(1, msg.message(8)?.long(1) ?: 0) }) // ping
                 msg.has(50) -> msg.message(50)?.let { v -> _volume.value = Volume(v.int(7), v.int(6), v.bool(8)) }
-                msg.has(20) -> _currentApp.value = msg.message(20)?.message(1)?.string(12)
+                msg.has(20) -> msg.message(20)?.let {
+                    _currentApp.value = it.message(1)?.string(12)
+                    _textFieldOpen.value = it.has(2)
+                }
                 msg.has(40) -> _state.value = State.Connected
-                msg.has(30) -> voiceBegin?.complete(msg.message(30)?.long(1) ?: 0)
+                msg.has(30) -> {
+                    trace("<- voice_begin ${msg.message(30)?.long(1)}")
+                    voiceBegin?.complete(msg.message(30)?.long(1) ?: 0)
+                }
+                msg.has(22) -> msg.message(22)?.message(2)?.let {
+                    _textFieldOpen.value = true
+                    trace("<- TV field now '${it.string(2)}'")
+                }
+                msg.has(21) -> {
+                    _textFieldOpen.value = true
+                    trace("<- ime_batch_edit ${msg.message(21)?.long(1)}/${msg.message(21)?.long(2)}")
+                }
                 msg.has(3) -> Log.w(TAG, "TV reported an error")
             }
         }
     }
+
+    /** Protocol trace at error level: MIUI drops info/warn logs from apps. */
+    private fun trace(line: String) = Log.e("AtvTrace", "$host $line")
 
     private fun reply(message: ProtoWriter) {
         val body = message.toByteArray()
@@ -214,6 +275,7 @@ class AtvRemote(val host: String, private val identity: AtvIdentity, private val
     companion object {
         private const val TAG = "AtvRemote"
         private const val KEYCODE_SEARCH = 84
+        private const val IDLE_CLOSE_MS = 15_000L
         // PING | KEY | IME | VOICE | POWER | VOLUME | APP_LINK
         private const val FEATURES = 1L or 2L or 4L or 8L or 32L or 64L or 512L
         private const val VOICE_CHUNK_MIN = 8 * 1024

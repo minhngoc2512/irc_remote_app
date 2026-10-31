@@ -19,6 +19,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -59,12 +60,14 @@ import java.io.ByteArrayOutputStream
 
 private const val SAMPLE_RATE = 8_000 // the TV expects PCM 16-bit mono 8 kHz
 private const val SEND_BYTES = 8 * 1024 // ~0.5 s per voice payload
+private const val MAX_TALK_MS = 10_000L
 
 private enum class VoiceState { Idle, Opening, Listening }
 
 /**
- * Push-to-talk for the TV's assistant: hold to stream the phone microphone,
- * release to finish. Works like the mic key on the Mi Box remote.
+ * Talk to the TV's assistant: tap to start streaming the phone microphone,
+ * tap again (or wait [MAX_TALK_MS]) to finish. A tap toggle, not press-and-hold:
+ * inside the scrolling remote a hold is cancelled as soon as the finger moves.
  */
 @Composable
 fun HoldToTalk(client: AtvRemote, accent: Color) {
@@ -72,12 +75,12 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(VoiceState.Idle) }
-    var holding by remember { mutableStateOf(false) }
+    var listening by remember { mutableStateOf(false) }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) Toast.makeText(context, "Đã cho phép micro, giữ nút để nói", Toast.LENGTH_SHORT).show()
+        if (granted) Toast.makeText(context, "Đã cho phép micro, chạm lại để nói", Toast.LENGTH_SHORT).show()
     }
     val pulse by rememberInfiniteTransition(label = "voice").animateFloat(
-        1f, 1.08f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse",
+        1f, 1.05f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse",
     )
 
     @SuppressLint("MissingPermission") // checked before calling
@@ -94,12 +97,22 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
         val recorder = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(minBuf, SEND_BYTES))
         val pending = ByteArrayOutputStream()
+        val captured = ByteArrayOutputStream() // kept for diagnosis: files/last_voice.pcm
         val buf = ByteArray(2_048)
+        var total = 0
+        val started = System.currentTimeMillis()
         try {
             recorder.startRecording()
-            while (holding && isActive) {
+            while (listening && isActive && System.currentTimeMillis() - started < MAX_TALK_MS) {
                 val n = recorder.read(buf, 0, buf.size)
-                if (n > 0) pending.write(buf, 0, n)
+                if (n > 0) {
+                    pending.write(buf, 0, n)
+                    captured.write(buf, 0, n)
+                    total += n
+                } else if (n < 0) {
+                    android.util.Log.e("AtvTrace", "mic read error $n (state=${recorder.recordingState})")
+                    break
+                }
                 if (pending.size() >= SEND_BYTES) {
                     client.sendVoice(session, pending.toByteArray())
                     pending.reset()
@@ -107,9 +120,29 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
             }
             if (pending.size() > 0) client.sendVoice(session, pending.toByteArray())
         } finally {
+            android.util.Log.e("AtvTrace", "mic captured $total bytes in ${System.currentTimeMillis() - started} ms")
+            runCatching { java.io.File(context.filesDir, "last_voice.pcm").writeBytes(captured.toByteArray()) }
             runCatching { recorder.stop() }
             recorder.release()
             client.endVoice(session)
+            listening = false
+        }
+    }
+
+    fun toggle() {
+        if (state != VoiceState.Idle) {
+            listening = false // the streaming loop ends and closes the session
+            return
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            askMic.launch(Manifest.permission.RECORD_AUDIO)
+            return
+        }
+        listening = true
+        state = VoiceState.Opening
+        scope.launch {
+            stream()
+            state = VoiceState.Idle
         }
     }
 
@@ -121,29 +154,15 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
             .scale(if (state == VoiceState.Listening) pulse else 1f)
             .clip(RoundedCornerShape(30.dp))
             .background(if (state == VoiceState.Idle) palette.key else accent)
-            .pointerInput(client) {
-                detectTapGestures(onPress = {
-                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                        askMic.launch(Manifest.permission.RECORD_AUDIO)
-                        return@detectTapGestures
-                    }
-                    holding = true
-                    state = VoiceState.Opening
-                    val job = scope.launch { stream() }
-                    tryAwaitRelease()
-                    holding = false
-                    job.join()
-                    state = VoiceState.Idle
-                })
-            },
+            .clickable(onClickLabel = "Nói với TV") { toggle() },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Mic, null, tint = if (state == VoiceState.Idle) accent else Color.White, modifier = Modifier.size(26.dp))
             Text(
                 when (state) {
-                    VoiceState.Idle -> "Giữ để nói với TV"
+                    VoiceState.Idle -> "Chạm để nói với TV"
                     VoiceState.Opening -> "Đang mở trợ lý…"
-                    VoiceState.Listening -> "Đang nghe… thả tay khi nói xong"
+                    VoiceState.Listening -> "Đang nghe… chạm để gửi"
                 },
                 style = MaterialTheme.typography.labelLarge,
                 color = if (state == VoiceState.Idle) palette.ink else Color.White,

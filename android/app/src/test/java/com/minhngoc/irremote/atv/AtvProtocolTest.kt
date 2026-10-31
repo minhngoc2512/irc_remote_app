@@ -267,3 +267,34 @@ class AtvImeRepeat {
         s.close()
     }
 }
+
+
+/** Streams a recorded PCM file (8 kHz 16-bit mono) to the TV assistant in real time: ATV_VOICE_PCM=... */
+class AtvVoiceReplay {
+    @Test
+    fun replay() {
+        val host = System.getenv("ATV_HOST")
+        val dir = System.getenv("ATV_ID_DIR")
+        val pcmPath = System.getenv("ATV_VOICE_PCM")
+        assumeTrue(!host.isNullOrBlank() && !dir.isNullOrBlank() && !pcmPath.isNullOrBlank())
+        val pcm = java.io.File(pcmPath!!).readBytes()
+        val remote = AtvRemote(host!!, AtvIdentity.load(java.io.File(dir!!)))
+        remote.connect()
+        val deadline = System.currentTimeMillis() + 10_000
+        while (remote.state.value != AtvRemote.State.Connected && System.currentTimeMillis() < deadline) Thread.sleep(100)
+        Thread.sleep(500)
+        val session = kotlinx.coroutines.runBlocking { remote.startVoice() }
+        println("session=$session")
+        org.junit.Assert.assertNotNull(session)
+        Thread.sleep(300)
+        var i = 0
+        while (i < pcm.size) { // 8 KB = 0.512 s of audio, paced like a live microphone
+            remote.sendVoice(session!!, pcm.copyOfRange(i, minOf(i + 8192, pcm.size)))
+            i += 8192
+            Thread.sleep(512)
+        }
+        remote.endVoice(session!!)
+        Thread.sleep(4_000)
+        remote.disconnect()
+    }
+}
