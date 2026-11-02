@@ -17,3 +17,8 @@ android/.idea/
 
 # Personal device audits (installed apps, device logs) — never publish
 device-audit/
+
+# Release signing (points at a keystore kept outside the repo)
+android/keystore.properties
+*.jks
+*.keystore

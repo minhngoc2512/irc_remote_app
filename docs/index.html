@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EzRemote: one remote for the whole house</title>
+<meta name="description" content="Free, open-source Android remote: infrared for TVs, air conditioners and fans, plus Android TV and LG webOS over Wi-Fi.">
+<meta property="og:title" content="EzRemote">
+<meta property="og:description" content="One remote for the whole house: infrared plus Android TV and LG webOS over Wi-Fi. Free and open source.">
+<meta property="og:image" content="https://minhngoc2512.github.io/irc_remote_app/img/home.webp">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --room: #e8ecf0; --body: #f9fafb; --key: #ffffff; --ink: #1d232b; --ink-soft: #66707c;
+    --groove: #edf0f3; --shadow: rgba(42, 53, 66, .16); --power: #e5484d; --navy: #1f3a5f;
+    --tv: #2f5bea; --ac: #1fa5c9; --fan: #2fae73; --atv: #1e9e6a; --lg: #a50034; --light: #e8a800;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --room: #16191d; --body: #22262c; --key: #2e333a; --ink: #edf0f3; --ink-soft: #9aa4af;
+      --groove: #1b1e23; --shadow: rgba(0, 0, 0, .45); --power: #f2555a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--room); color: var(--ink);
+    font-family: "Be Vietnam Pro", system-ui, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+  /* Top bar */
+  header { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--room) 82%, transparent); }
+  .bar { display: flex; align-items: center; gap: 14px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; text-decoration: none; letter-spacing: -.01em; }
+  .brand img { width: 34px; height: 34px; border-radius: 10px; }
+  .bar nav { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .bar nav a { text-decoration: none; font-size: 14px; font-weight: 500; color: var(--ink-soft); padding: 8px 10px; border-radius: 12px; }
+  .bar nav a:hover { color: var(--ink); background: var(--groove); }
+  .lang { display: flex; background: var(--groove); border-radius: 14px; padding: 3px; }
+  .lang button {
+    border: 0; background: none; font: 600 13px/1 inherit; font-family: inherit; color: var(--ink-soft);
+    padding: 8px 10px; border-radius: 11px; cursor: pointer;
+  }
+  .lang button[aria-pressed="true"] { background: var(--key); color: var(--ink); box-shadow: 0 1px 3px var(--shadow); }
+
+  /* Hero */
+  .hero { display: grid; grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: center; padding: 56px 0 72px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    background: var(--body); padding: 6px 12px 6px 8px; border-radius: 999px; box-shadow: 0 1px 3px var(--shadow); }
+  .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--fan); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fan) 22%, transparent); }
+  h1 { font-size: clamp(38px, 5.4vw, 62px); line-height: 1.05; letter-spacing: -.035em; margin: 20px 0 18px; font-weight: 800; }
+  h1 em { font-style: normal; color: var(--tv); }
+  .lead { font-size: 18px; color: var(--ink-soft); max-width: 34em; margin: 0 0 30px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 700; font-size: 16px;
+    padding: 15px 22px; border-radius: 18px; transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: var(--ink); color: var(--body); box-shadow: 0 8px 22px var(--shadow); }
+  .btn.ghost { background: var(--body); box-shadow: 0 1px 3px var(--shadow); }
+  .btn svg { width: 20px; height: 20px; }
+  .fine { font-size: 13px; color: var(--ink-soft); margin-top: 14px; }
+
+  /* Phones */
+  .phones { position: relative; height: 620px; }
+  .phone {
+    position: absolute; width: 270px; border-radius: 38px; padding: 9px; background: var(--body);
+    box-shadow: 0 30px 60px -18px var(--shadow), 0 2px 6px var(--shadow), inset 0 0 0 1px color-mix(in srgb, var(--ink) 8%, transparent);
+  }
+  .phone img { display: block; width: 100%; border-radius: 30px; }
+  .phone.back { left: 0; top: 54px; transform: rotate(-5deg); }
+  .phone.front { right: 0; top: 0; transform: rotate(3deg); }
+
+  /* Sections */
+  section { padding: 72px 0; }
+  h2 { font-size: clamp(28px, 3.4vw, 40px); letter-spacing: -.025em; line-height: 1.15; margin: 0 0 12px; font-weight: 800; }
+  .sub { color: var(--ink-soft); font-size: 17px; max-width: 40em; margin: 0 0 40px; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .card { background: var(--body); border-radius: 28px; padding: 26px; box-shadow: 0 2px 6px var(--shadow); }
+  .badge { width: 48px; height: 48px; border-radius: 15px; display: grid; place-items: center; color: #fff; margin-bottom: 18px; }
+  .badge svg { width: 26px; height: 26px; }
+  .card h3 { margin: 0 0 8px; font-size: 19px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--ink-soft); font-size: 15px; }
+  .card ul { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 14px; color: var(--ink-soft); }
+  .card li::before { content: "•"; color: var(--ink); margin-right: 8px; }
+
+  /* Gallery */
+  .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .shot { margin: 0; }
+  .shot .phone { position: static; width: 100%; transform: none; border-radius: 30px; padding: 7px; }
+  .shot .phone img { border-radius: 24px; }
+  .shot figcaption { font-size: 14px; color: var(--ink-soft); margin-top: 12px; text-align: center; }
+
+  /* Steps */
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; counter-reset: s; }
+  .step { background: var(--body); border-radius: 28px; padding: 26px; box-shadow: 0 2px 6px var(--shadow); }
+  .step::before {
+    counter-increment: s; content: counter(s); display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
+    background: var(--groove); font-weight: 800; margin-bottom: 14px;
+  }
+  .step h3 { margin: 0 0 6px; font-size: 18px; }
+  .step p { margin: 0; color: var(--ink-soft); font-size: 15px; }
+
+  .langs { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .langs span { background: var(--body); border-radius: 14px; padding: 10px 16px; font-weight: 600; box-shadow: 0 1px 3px var(--shadow); }
+
+  .download {
+    background: var(--navy); color: #fff; border-radius: 36px; padding: 48px; display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center;
+  }
+  .download h2 { color: #fff; }
+  .download p { color: rgba(255,255,255,.75); margin: 0; }
+  .download .btn.primary { background: #fff; color: var(--navy); }
+  .download code { background: rgba(255,255,255,.12); padding: 2px 8px; border-radius: 8px; font-size: 13px; }
+
+  footer { padding: 40px 0 56px; color: var(--ink-soft); font-size: 14px; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; justify-content: space-between; }
+  footer p { margin: 0; max-width: 46em; }
+
+  [data-vi] { display: none; }
+  html[lang="vi"] [data-en] { display: none; }
+  html[lang="vi"] [data-vi] { display: revert; }
+
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; padding-top: 32px; }
+    .phones { height: 520px; max-width: 460px; width: 100%; margin: 0 auto; }
+    .phone { width: 230px; }
+    .grid, .steps { grid-template-columns: 1fr; }
+    .gallery { grid-template-columns: repeat(2, 1fr); }
+    .download { grid-template-columns: 1fr; padding: 32px; }
+    .bar nav a { display: none; }
+  }
+  @media (max-width: 420px) {
+    .phones { height: 440px; }
+    .phone { width: 190px; border-radius: 30px; }
+    .phone img { border-radius: 23px; }
+    section { padding: 52px 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#"><img src="img/icon.svg" alt="">EzRemote</a>
+    <nav>
+      <a href="#features"><span data-en>Features</span><span data-vi>Tính năng</span></a>
+      <a href="#screens"><span data-en>Screens</span><span data-vi>Giao diện</span></a>
+      <a href="https://github.com/minhngoc2512/irc_remote_app">GitHub</a>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-set-lang="en">EN</button>
+        <button type="button" data-set-lang="vi">VI</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div>
+      <span class="eyebrow"><i></i><span data-en>Free · open source · no ads</span><span data-vi>Miễn phí · mã nguồn mở · không quảng cáo</span></span>
+      <h1 data-en>One remote for <em>the whole house</em>.</h1>
+      <h1 data-vi>Một remote cho <em>cả ngôi nhà</em>.</h1>
+      <p class="lead" data-en>EzRemote turns your Android phone into a remote for TVs, air conditioners, fans and lights over infrared, and for Android TV and LG webOS TVs over Wi-Fi, with no IR blaster needed.</p>
+      <p class="lead" data-vi>EzRemote biến điện thoại Android thành remote cho TV, điều hòa, quạt, đèn qua hồng ngoại, và cho Android TV, TV LG webOS qua Wi-Fi, không cần cổng hồng ngoại.</p>
+      <div class="cta">
+        <a class="btn primary" href="https://github.com/minhngoc2512/irc_remote_app/releases/latest/download/EzRemote.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          <span data-en>Download APK</span><span data-vi>Tải APK</span>
+        </a>
+        <a class="btn ghost" href="https://github.com/minhngoc2512/irc_remote_app">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          <span data-en>Source code</span><span data-vi>Mã nguồn</span>
+        </a>
+      </div>
+      <p class="fine" data-en>Android 8.0 or later · 9 MB · MIT license</p>
+      <p class="fine" data-vi>Android 8.0 trở lên · 9 MB · giấy phép MIT</p>
+    </div>
+    <div class="phones" aria-hidden="true">
+      <div class="phone back"><img src="img/home.webp" alt="" width="540" height="1110"></div>
+      <div class="phone front"><img src="img/ac.webp" alt="" width="540" height="1110"></div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <h2 data-en>Everything with a remote, in one app</h2>
+      <h2 data-vi>Thiết bị nào có remote, đều điều khiển được</h2>
+      <p class="sub" data-en>Pick a device, try a few buttons, keep the codeset that works. Each device type gets a remote laid out like the real one.</p>
+      <p class="sub" data-vi>Chọn thiết bị, bấm thử vài nút, giữ bộ mã đúng. Mỗi loại thiết bị có giao diện remote giống remote thật.</p>
+      <div class="grid">
+        <article class="card">
+          <div class="badge" style="background:var(--tv)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/></svg></div>
+          <h3 data-en>7,000+ infrared codesets</h3><h3 data-vi>Hơn 7.000 bộ mã hồng ngoại</h3>
+          <p data-en>TVs, set-top boxes, projectors, speakers, fans, lights and more, merged from open databases and cleaned up.</p>
+          <p data-vi>TV, đầu thu, máy chiếu, loa, quạt, đèn… gộp từ các cơ sở dữ liệu mở và đã chuẩn hóa.</p>
+        </article>
+        <article class="card">
+          <div class="badge" style="background:var(--ac)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M4.9 6l14.2 12M4.9 18 19.1 6"/></svg></div>
+          <h3 data-en>A real A/C panel</h3><h3 data-vi>Bảng điều khiển điều hòa thật sự</h3>
+          <p data-en>Temperature dial, mode, fan speed and swing. Every change sends the full state, like the remote that came with the unit.</p>
+          <p data-vi>Vòng chỉnh nhiệt độ, chế độ, tốc độ gió, đảo gió. Mỗi lần chỉnh gửi trọn trạng thái, như remote đi kèm máy.</p>
+        </article>
+        <article class="card">
+          <div class="badge" style="background:var(--atv)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 16a6 6 0 0 1 6 6M2 12a10 10 0 0 1 10 10M2 8a14 14 0 0 1 14 14"/><path d="M6 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/></svg></div>
+          <h3 data-en>Android TV over Wi-Fi</h3><h3 data-vi>Android TV qua Wi-Fi</h3>
+          <p data-en>Mi Box, Google TV and Android-based TVs: pair with the code on screen.</p>
+          <p data-vi>Mi Box, Google TV và TV chạy Android: ghép nối bằng mã hiện trên màn hình.</p>
+          <ul>
+            <li data-en>D-pad or swipe touchpad</li><li data-vi>Phím điều hướng hoặc bàn rê</li>
+            <li data-en>Type and dictate into the TV</li><li data-vi>Gõ chữ và đọc chữ lên TV</li>
+            <li data-en>Launch apps directly</li><li data-vi>Mở thẳng ứng dụng</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="badge" style="background:var(--lg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l12 9-5.5 1.2L15 20l-2.5 1-3.4-6.6L5 18z"/></svg></div>
+          <h3 data-en>LG webOS TVs</h3><h3 data-vi>TV LG webOS</h3>
+          <p data-en>Accept once on the TV, then use it like the Magic Remote.</p>
+          <p data-vi>Chấp nhận một lần trên TV, rồi dùng như Magic Remote.</p>
+          <ul>
+            <li data-en>Touch mouse pointer</li><li data-vi>Chuột cảm ứng</li>
+            <li data-en>TV apps and HDMI inputs</li><li data-vi>Ứng dụng trên TV và cổng HDMI</li>
+            <li data-en>Turn on with Wake-on-LAN</li><li data-vi>Bật TV bằng Wake-on-LAN</li>
+          </ul>
+        </article>
+        <article class="card">
+          <div class="badge" style="background:var(--power)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8M6.3 7a8 8 0 1 0 11.4 0"/></svg></div>
+          <h3 data-en>Power from the home screen</h3><h3 data-vi>Bật/tắt ngay từ màn hình chính</h3>
+          <p data-en>Every saved device has a power key on its card, and A/C cards show the last state you sent.</p>
+          <p data-vi>Mỗi thiết bị đã lưu có nút nguồn ngay trên thẻ, thẻ điều hòa hiện trạng thái đã gửi gần nhất.</p>
+        </article>
+        <article class="card">
+          <div class="badge" style="background:var(--light)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></div>
+          <h3 data-en>Private and offline</h3><h3 data-vi>Riêng tư, chạy offline</h3>
+          <p data-en>No account, no tracking, no ads. The code database ships inside the app, and network remotes only talk to TVs on your Wi-Fi.</p>
+          <p data-vi>Không tài khoản, không theo dõi, không quảng cáo. Cơ sở dữ liệu mã có sẵn trong app, remote qua mạng chỉ nói chuyện với TV trong Wi-Fi nhà bạn.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <h2 data-en>Remotes that look like remotes</h2>
+      <h2 data-vi>Remote trông như remote thật</h2>
+      <p class="sub" data-en>Molded keys, a D-pad, rockers for volume and channel, and a light and dark theme that follows your phone.</p>
+      <p class="sub" data-vi>Phím nổi, D-pad, cần gạt âm lượng và kênh, giao diện sáng/tối theo điện thoại.</p>
+      <div class="gallery">
+        <figure class="shot"><div class="phone"><img src="img/tv.webp" alt="TV remote" loading="lazy" width="540" height="1110"></div>
+          <figcaption data-en>TV remote</figcaption><figcaption data-vi>Remote TV</figcaption></figure>
+        <figure class="shot"><div class="phone"><img src="img/categories.webp" alt="Device types" loading="lazy" width="540" height="1110"></div>
+          <figcaption data-en>Pick what to control</figcaption><figcaption data-vi>Chọn thiết bị cần điều khiển</figcaption></figure>
+        <figure class="shot"><div class="phone"><img src="img/fan.webp" alt="Fan remote" loading="lazy" width="540" height="1110"></div>
+          <figcaption data-en>Fan remote</figcaption><figcaption data-vi>Remote quạt</figcaption></figure>
+        <figure class="shot"><div class="phone"><img src="img/language.webp" alt="Language picker" loading="lazy" width="540" height="1110"></div>
+          <figcaption data-en>8 languages</figcaption><figcaption data-vi>8 ngôn ngữ</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2 data-en>Set up in a minute</h2>
+      <h2 data-vi>Cài đặt trong một phút</h2>
+      <p class="sub" data-en>No codes to look up, no manual to read.</p>
+      <p class="sub" data-vi>Không phải tra mã, không cần đọc hướng dẫn.</p>
+      <div class="steps">
+        <div class="step"><h3 data-en>Choose the device</h3><h3 data-vi>Chọn thiết bị</h3>
+          <p data-en>TV, A/C, fan… then the brand. Or pick a TV that EzRemote finds on your Wi-Fi.</p>
+          <p data-vi>TV, điều hòa, quạt… rồi chọn hãng. Hoặc chọn TV mà EzRemote tìm thấy trong mạng Wi-Fi.</p></div>
+        <div class="step"><h3 data-en>Try a few buttons</h3><h3 data-vi>Bấm thử vài nút</h3>
+          <p data-en>Point the phone at the device. If it responds, that's your codeset; if not, try the next one.</p>
+          <p data-vi>Hướng điện thoại về thiết bị. Thiết bị phản hồi thì giữ bộ mã đó, không thì thử bộ tiếp theo.</p></div>
+        <div class="step"><h3 data-en>Name it and go</h3><h3 data-vi>Đặt tên và dùng</h3>
+          <p data-en>It lands on your home screen with a power key, ready next time.</p>
+          <p data-vi>Thiết bị nằm trên màn hình chính cùng nút nguồn, sẵn sàng cho lần sau.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2 data-en>Speaks your language</h2>
+      <h2 data-vi>Nói ngôn ngữ của bạn</h2>
+      <p class="sub" data-en>Follows your phone's language, or pick one in the app.</p>
+      <p class="sub" data-vi>Theo ngôn ngữ của điện thoại, hoặc tự chọn trong app.</p>
+      <div class="langs"><span>English</span><span>Tiếng Việt</span><span>日本語</span><span>한국어</span><span>हिन्दी</span><span>ไทย</span><span>ລາວ</span><span>Bahasa Indonesia</span></div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="download">
+        <div>
+          <h2 data-en>Get EzRemote</h2><h2 data-vi>Tải EzRemote</h2>
+          <p data-en>Download the APK, open it and allow installing from your browser. IR remotes need a phone with an IR blaster (Xiaomi, Redmi, POCO…); Wi-Fi remotes work on any Android phone on the same network as the TV.</p>
+          <p data-vi>Tải APK, mở file và cho phép trình duyệt cài ứng dụng. Remote hồng ngoại cần điện thoại có cổng IR (Xiaomi, Redmi, POCO…); remote Wi-Fi chạy trên mọi điện thoại Android cùng mạng với TV.</p>
+        </div>
+        <a class="btn primary" href="https://github.com/minhngoc2512/irc_remote_app/releases/latest/download/EzRemote.apk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          <span data-en>Download APK</span><span data-vi>Tải APK</span>
+        </a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p data-en>Infrared codes from Flipper-IRDB, irdb and IRremoteESP8266; see the app's Data sources screen and <a href="https://github.com/minhngoc2512/irc_remote_app/blob/main/NOTICE.md">NOTICE.md</a>. Not affiliated with LG, Xiaomi, Google or any device maker.</p>
+    <p data-vi>Mã hồng ngoại từ Flipper-IRDB, irdb và IRremoteESP8266; xem màn hình Nguồn dữ liệu trong app và <a href="https://github.com/minhngoc2512/irc_remote_app/blob/main/NOTICE.md">NOTICE.md</a>. Không liên kết với LG, Xiaomi, Google hay hãng thiết bị nào.</p>
+    <p>© 2026 Minh Ngoc · <a href="https://github.com/minhngoc2512/irc_remote_app/blob/main/LICENSE">MIT</a></p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    function set(lang) {
+      root.lang = lang;
+      document.querySelectorAll('[data-set-lang]').forEach(function (b) {
+        b.setAttribute('aria-pressed', String(b.dataset.setLang === lang));
+      });
+    }
+    var saved = null;
+    try { saved = localStorage.getItem('lang'); } catch (e) {}
+    set(saved || ((navigator.language || '').toLowerCase().indexOf('vi') === 0 ? 'vi' : 'en'));
+    document.querySelectorAll('[data-set-lang]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        set(b.dataset.setLang);
+        try { localStorage.setItem('lang', b.dataset.setLang); } catch (e) {}
+      });
+    });
+  })();
+</script>
+</body>
+</html>
