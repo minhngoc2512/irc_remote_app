@@ -77,19 +77,40 @@ class UserDevices private constructor(context: Context) :
         },
     )
 
-    /** A TV controlled over the network; it has no IR codeset. */
-    fun addNetwork(name: String, kind: String, host: String, brand: String): Long = writableDatabase.insert(
-        "devices", null,
-        ContentValues().apply {
-            put("name", name)
-            put("codeset_id", 0)
-            put("category_key", "tv")
-            put("brand_name", brand)
-            put("created_at", System.currentTimeMillis())
-            put("kind", kind)
-            put("host", host)
-        },
-    )
+    /**
+     * A TV controlled over the network; it has no IR codeset. One entry per TV: adding a
+     * TV that is already saved (same kind and address) returns the existing entry.
+     */
+    fun addNetwork(name: String, kind: String, host: String, brand: String): Long =
+        findNetwork(kind, host)?.let { existing ->
+            // Swap the address-only placeholder from the port sweep for the TV's real name.
+            if (existing.name.startsWith("TV LG (") && !name.startsWith("TV LG (")) rename(existing.id, name)
+            existing.id
+        } ?: writableDatabase.insert(
+            "devices", null,
+            ContentValues().apply {
+                put("name", name)
+                put("codeset_id", 0)
+                put("category_key", "tv")
+                put("brand_name", brand)
+                put("created_at", System.currentTimeMillis())
+                put("kind", kind)
+                put("host", host)
+            },
+        )
+
+    fun findNetwork(kind: String, host: String): UserDevice? = all().firstOrNull { it.kind == kind && it.host == host }
+
+    /** Drops duplicate network TVs saved by earlier versions, keeping the first one added. */
+    override fun onOpen(db: SQLiteDatabase) {
+        super.onOpen(db)
+        if (!db.isReadOnly) {
+            db.execSQL(
+                """DELETE FROM devices WHERE kind != 'ir' AND id NOT IN
+                   (SELECT MIN(id) FROM devices WHERE kind != 'ir' GROUP BY kind, host)""",
+            )
+        }
+    }
 
     fun rename(id: Long, name: String) {
         writableDatabase.update("devices", ContentValues().apply { put("name", name) }, "id = ?", arrayOf(id.toString()))

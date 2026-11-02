@@ -206,7 +206,10 @@ private fun PickTv(onPick: (FoundTv) -> Unit) {
                 color = palette.inkSoft, modifier = Modifier.padding(start = 12.dp))
         }
     }
+    val deps = LocalDeps.current
+    val saved by loadAsync(Unit) { deps.devices.all() }
     found.forEach { tv ->
+        val existing = saved?.any { it.kind == UserDevice.KIND_ATV && it.host == tv.host } == true
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(palette.body)
@@ -217,7 +220,9 @@ private fun PickTv(onPick: (FoundTv) -> Unit) {
             }
             Column(Modifier.padding(start = 14.dp)) {
                 Text(tv.name, style = MaterialTheme.typography.titleSmall)
-                Text(tv.host, style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
+                // Picking a saved box re-pairs it; the existing entry is kept, not duplicated.
+                Text(if (existing) "${tv.host} · Đã có trong Thiết bị của tôi, chạm để ghép nối lại" else tv.host,
+                    style = MaterialTheme.typography.bodySmall, color = if (existing) style.accent else palette.inkSoft)
             }
         }
     }

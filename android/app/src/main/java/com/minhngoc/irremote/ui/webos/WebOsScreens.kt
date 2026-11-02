@@ -121,6 +121,7 @@ fun WebOsAddScreen(nav: Navigator) {
     val style = deviceStyle("webos")
     val found by remember { WebOsDiscovery.scan(context) }.collectAsState(initial = emptyList())
     var picked by remember { mutableStateOf<FoundWebOs?>(null) }
+    val saved by com.minhngoc.irremote.ui.loadAsync(Unit) { deps.devices.all() }
     var manual by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -140,17 +141,21 @@ fun WebOsAddScreen(nav: Navigator) {
                     }
                 }
                 found.forEach { f ->
+                    // Already saved: open its remote instead of adding a second copy.
+                    val existing = saved?.firstOrNull { it.kind == UserDevice.KIND_WEBOS && it.host == f.host }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(palette.body)
-                            .clickable { picked = f }.padding(14.dp),
+                            .clickable { if (existing != null) nav.resetTo(Screen.Home, Screen.Remote(existing)) else picked = f }
+                            .padding(14.dp),
                     ) {
                         Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(style.accent), contentAlignment = Alignment.Center) {
                             Icon(style.icon, null, tint = Color.White, modifier = Modifier.size(22.dp))
                         }
                         Column(Modifier.padding(start = 14.dp)) {
                             Text(f.name, style = MaterialTheme.typography.titleSmall)
-                            Text(f.host, style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
+                            Text(if (existing != null) "${f.host} · Đã có trong Thiết bị của tôi" else f.host,
+                                style = MaterialTheme.typography.bodySmall, color = if (existing != null) style.accent else palette.inkSoft)
                         }
                     }
                 }
