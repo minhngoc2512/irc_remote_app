@@ -333,7 +333,7 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
                 Touchpad(client, style.accent)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                HRocker("Âm lượng", k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f))
+                HRocker("Âm lượng", k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f), icon = Icons.AutoMirrored.Filled.VolumeUp)
                 HRocker("Kênh", k("CH_DOWN"), k("CH_UP"), Modifier.weight(1f))
             }
             // Boxes that pass audio over HDMI report 0/0: nothing useful to show.

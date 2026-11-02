@@ -155,15 +155,21 @@ fun Touchpad(client: AtvRemote, accent: Color) {
 
 /** Horizontal rocker: − on the left, caption in the middle, + on the right. */
 @Composable
-fun HRocker(caption: String, down: KeySpec, up: KeySpec, modifier: Modifier = Modifier) {
+fun HRocker(caption: String, down: KeySpec, up: KeySpec, modifier: Modifier = Modifier, icon: ImageVector? = null) {
     val palette = LocalPalette.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier.clip(RoundedCornerShape(30.dp)).background(palette.groove).padding(4.dp),
     ) {
         IrKey(down, Modifier.size(52.dp), shape = CircleShape)
-        Text(caption, style = MaterialTheme.typography.labelMedium, color = palette.inkSoft, maxLines = 1,
-            modifier = Modifier.weight(1f).padding(horizontal = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        if (icon != null) {
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = caption, tint = palette.inkSoft, modifier = Modifier.size(20.dp))
+            }
+        } else {
+            Text(caption, style = MaterialTheme.typography.labelSmall, color = palette.inkSoft, maxLines = 1, softWrap = false,
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
         IrKey(up, Modifier.size(52.dp), shape = CircleShape)
     }
 }

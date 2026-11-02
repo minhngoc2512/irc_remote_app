@@ -243,6 +243,7 @@ private fun DeviceCard(device: UserDevice, onOpen: () -> Unit, onRename: () -> U
     val deps = LocalDeps.current
     val palette = LocalPalette.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val style = deviceStyle(if (device.isNetwork) device.kind else device.categoryKey)
     val buttons by loadAsync(device.id) {
         if (device.isNetwork) emptyList() else deps.db.buttons(device.codesetUid?.let { deps.db.codesetId(it) } ?: device.codesetId)
@@ -255,6 +256,19 @@ private fun DeviceCard(device: UserDevice, onOpen: () -> Unit, onRename: () -> U
     var menu by remember { mutableStateOf(false) }
 
     val power: (() -> Unit)? = when {
+        device.kind == UserDevice.KIND_WEBOS -> device.host?.let { host ->
+            {
+                val lg = com.minhngoc.irremote.ui.webos.webOsClient(context, host)
+                scope.launch(Dispatchers.IO) {
+                    // Off if it answers, otherwise wake it (Wake-on-LAN with the MAC learned at pairing).
+                    val on = listOf(3000, 3001).any { port ->
+                        runCatching { java.net.Socket().use { it.connect(java.net.InetSocketAddress(host, port), 500) } }.isSuccess
+                    }
+                    if (on) lg.powerOff() else lg.powerOn()
+                }
+                Unit
+            }
+        }
         device.isNetwork -> atv?.let { client -> { client.sendKey(KeyEvent.KEYCODE_POWER); Unit } }
         acButtons.isNotEmpty() -> {
             {
@@ -275,6 +289,7 @@ private fun DeviceCard(device: UserDevice, onOpen: () -> Unit, onRename: () -> U
     val status = when {
         isAc && ac.power -> "Đang bật · ${acModeLabel(ac.mode)}${if (ac.mode != "fan") " ${ac.temp}°" else ""}"
         isAc -> "Đang tắt · ${device.brandName}"
+        device.kind == UserDevice.KIND_WEBOS -> "LG webOS · Wi-Fi"
         device.isNetwork -> "Android TV · Wi-Fi"
         else -> "${device.brandName} · ${style.name}"
     }
@@ -357,6 +372,23 @@ private fun EmptyHome(padding: PaddingValues, onAdd: () -> Unit) {
 
 // --- Category / Brand pickers ----------------------------------------------------------------
 
+/** Full-width tile for remotes that work over the network (no IR blaster needed). */
+@Composable
+private fun NetworkTile(style: DeviceStyle, title: String, subtitle: String, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.tile(RoundedCornerShape(22.dp)).background(style.accent).clickable(onClick = onClick).padding(14.dp),
+    ) {
+        Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+            Icon(style.icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
+        }
+    }
+}
+
 @Composable
 fun CategoryScreen(nav: Navigator) {
     val deps = LocalDeps.current
@@ -373,24 +405,15 @@ fun CategoryScreen(nav: Navigator) {
         ) {
             // Network remote first: it is the only option on phones without an IR blaster.
             item(span = { GridItemSpan(maxLineSpan) }) {
-                val atv = deviceStyle("atv")
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.tile(RoundedCornerShape(22.dp)).background(atv.accent)
-                        .clickable { nav.push(Screen.AtvAdd) }.padding(14.dp),
-                ) {
-                    Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center) {
-                        Icon(atv.icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
-                    Column(Modifier.padding(start = 14.dp).weight(1f)) {
-                        Text("Android TV qua Wi-Fi", style = MaterialTheme.typography.titleMedium, color = Color.White)
-                        Text(
-                            if (deps.ir.available) "Mi Box, Google TV… điều khiển qua mạng, không cần hướng điện thoại"
-                            else "Dùng được trên điện thoại không có cổng hồng ngoại",
-                            style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f),
-                        )
-                    }
+                NetworkTile(
+                    deviceStyle("atv"), "Android TV qua Wi-Fi",
+                    if (deps.ir.available) "Mi Box, Google TV… điều khiển qua mạng, không cần hướng điện thoại"
+                    else "Dùng được trên điện thoại không có cổng hồng ngoại",
+                ) { nav.push(Screen.AtvAdd) }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                NetworkTile(deviceStyle("webos"), "TV LG (webOS) qua Wi-Fi", "Có chuột cảm ứng, mở app, chọn HDMI, bật TV từ xa") {
+                    nav.push(Screen.WebOsAdd)
                 }
             }
             if (!deps.ir.available) {

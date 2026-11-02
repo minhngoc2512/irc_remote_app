@@ -224,6 +224,7 @@ fun KeyFace(button: KeySpec, iconSize: Dp = 24.dp) {
     val icon = funcIcon(button.funcKey)
     val text = FUNC_TEXT[button.funcKey]
     when {
+        button.funcKey in KEY_COLORS -> Unit // the key's color is its label
         text != null -> Text(text, style = MaterialTheme.typography.titleMedium)
         icon != null -> Icon(icon, contentDescription = button.label, modifier = Modifier.size(iconSize))
         else -> Text(

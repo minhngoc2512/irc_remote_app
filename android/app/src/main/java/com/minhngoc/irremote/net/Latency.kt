@@ -11,14 +11,21 @@ import java.util.concurrent.TimeUnit
 object Latency {
     private val TIME = Regex("""time[=<]([0-9.]+)\s*ms""")
 
-    /** ICMP round trip using the system ping binary (no special permission needed). */
-    fun ping(host: String, timeoutSec: Int = 1): Float? = runCatching {
-        val p = ProcessBuilder("/system/bin/ping", "-c", "1", "-W", "$timeoutSec", host).redirectErrorStream(true).start()
-        if (!p.waitFor(timeoutSec + 2L, TimeUnit.SECONDS)) {
+    /**
+     * ICMP round trip using the system ping binary (no special permission needed).
+     *
+     * Sends a short burst and keeps the best reply: after a few idle seconds the Wi-Fi radio is in
+     * power-save, so the first reply waits for the next beacon (~100 ms extra). Key presses don't
+     * pay that cost (sending wakes the radio), so the minimum is the figure that matches the remote.
+     */
+    fun ping(host: String, count: Int = 3, timeoutSec: Int = 1): Float? = runCatching {
+        val p = ProcessBuilder("/system/bin/ping", "-c", "$count", "-i", "0.2", "-W", "$timeoutSec", host)
+            .redirectErrorStream(true).start()
+        if (!p.waitFor(timeoutSec + count + 2L, TimeUnit.SECONDS)) {
             p.destroy()
             return null
         }
-        TIME.find(p.inputStream.bufferedReader().readText())?.groupValues?.get(1)?.toFloat()
+        TIME.findAll(p.inputStream.bufferedReader().readText()).minOfOrNull { it.groupValues[1].toFloat() }
     }.getOrNull()
 
     /** Samples [host] every [periodMs] while collected. */

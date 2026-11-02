@@ -44,6 +44,7 @@ private val STYLES = listOf(
     DeviceStyle("vacuum", "Robot hút bụi", Icons.Filled.CleaningServices, Color(0xFF2FAE73)),
     DeviceStyle("other", "Khác", Icons.Filled.DevicesOther, Color(0xFF5B6B7C)),
     DeviceStyle("atv", "Android TV", Icons.Filled.Cast, Color(0xFF1E9E6A)),
+    DeviceStyle("webos", "TV LG webOS", Icons.Filled.Tv, Color(0xFFA50034)),
 ).associateBy { it.key }
 
 fun deviceStyle(key: String): DeviceStyle = STYLES[key] ?: STYLES.getValue("other")

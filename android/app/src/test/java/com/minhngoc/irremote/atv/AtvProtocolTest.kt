@@ -298,3 +298,70 @@ class AtvVoiceReplay {
         remote.disconnect()
     }
 }
+
+
+/** Voice format variants against a real TV; prints the TV's voice_begin bytes. */
+class AtvVoiceVariants {
+    @Test
+    fun variants() {
+        val host = System.getenv("ATV_HOST")
+        val dir = System.getenv("ATV_ID_DIR")
+        val pcm8 = System.getenv("ATV_VOICE_PCM")?.let { java.io.File(it).readBytes() }
+        val pcm16 = System.getenv("ATV_VOICE_PCM16")?.let { java.io.File(it).readBytes() }
+        assumeTrue(!host.isNullOrBlank() && !dir.isNullOrBlank() && pcm8 != null && pcm16 != null)
+        val log = java.io.File(System.getenv("ATV_LOG") ?: "/tmp/atv_voice.log").apply { writeText("") }
+        fun note(line: String) = log.appendText("${java.time.LocalTime.now()} $line\n")
+        val id = AtvIdentity.load(java.io.File(dir!!))
+        val s = id.sslContext.socketFactory.createSocket() as javax.net.ssl.SSLSocket
+        s.connect(java.net.InetSocketAddress(host, 6466), 4000)
+        s.soTimeout = 30_000
+        s.startHandshake()
+        val out = s.outputStream
+        val lock = Any()
+        fun send(w: ProtoWriter) = synchronized(lock) { out.writeFrame(w.toByteArray()) }
+        val begins = java.util.concurrent.LinkedBlockingQueue<Long>()
+        Thread {
+            try {
+                while (true) {
+                    val raw = s.inputStream.readFrame()
+                    val msg = ProtoMessage.parse(raw)
+                    if (!msg.has(8)) note("<- ${(1..100).filter { msg.has(it) }} ${raw.joinToString("") { "%02x".format(it) }.take(120)}")
+                    when {
+                        msg.has(1) -> send(ProtoWriter().message(1) {
+                            varint(1, 623L and (msg.message(1)?.long(1) ?: 0))
+                            message(2) { string(1, "Probe"); string(2, "Test"); varint(3, 1); string(4, "1"); string(5, "atvremote"); string(6, "1.0.0") }
+                        })
+                        msg.has(2) -> send(ProtoWriter().message(2) { varint(1, 623) })
+                        msg.has(8) -> send(ProtoWriter().message(9) { varint(1, msg.message(8)?.long(1) ?: 0) })
+                        msg.has(30) -> begins.put(msg.message(30)?.long(1) ?: 0)
+                    }
+                }
+            } catch (e: Exception) { note("reader ended: $e") }
+        }.apply { isDaemon = true; start() }
+        Thread.sleep(1_500)
+
+        fun chunks(pcm: ByteArray, size: Int) = (pcm.indices step size).map { pcm.copyOfRange(it, minOf(it + size, pcm.size)) }
+        fun payload(session: Long, piece: ByteArray) {
+            val padded = if (piece.size < 8192) piece.copyOf(8192) else piece
+            send(ProtoWriter().message(31) { varint(1, session); bytes(2, padded) })
+        }
+        fun session(name: String, body: (Long) -> Unit) {
+            note("== variant $name")
+            send(ProtoWriter().message(10) { varint(1, 84); varint(2, 3) }) // SEARCH
+            val sid = begins.poll(5, java.util.concurrent.TimeUnit.SECONDS)
+            note("   voice_begin=$sid")
+            if (sid == null) return
+            send(ProtoWriter().message(30) { varint(1, sid) })
+            body(sid)
+            send(ProtoWriter().message(32) { varint(1, sid) })
+            note("   ended")
+            Thread.sleep(10_000)
+        }
+        session("1: 8 kHz all at once") { sid -> chunks(pcm8!!, 20 * 1024).forEach { payload(sid, it) } }
+        session("2: 16 kHz paced") { sid -> chunks(pcm16!!, 16384).forEach { payload(sid, it); Thread.sleep(512) } }
+        session("3: 8 kHz paced, 0.5 s lead-in") { sid ->
+            (listOf(ByteArray(8192)) + chunks(pcm8!!, 8192)).forEach { payload(sid, it); Thread.sleep(512) }
+        }
+        s.close()
+    }
+}

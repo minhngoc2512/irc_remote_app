@@ -13,7 +13,7 @@ data class UserDevice(
     val codesetUid: String?,
     val categoryKey: String,
     val brandName: String,
-    /** "ir" = codeset sent by the IR blaster, "atv" = Android TV Remote v2 over Wi-Fi at [host]. */
+    /** "ir" = codeset sent by the IR blaster; "atv" (Android TV Remote v2) / "webos" (LG SSAP) = over Wi-Fi at [host]. */
     val kind: String = KIND_IR,
     val host: String? = null,
 ) {
@@ -22,6 +22,7 @@ data class UserDevice(
     companion object {
         const val KIND_IR = "ir"
         const val KIND_ATV = "atv"
+        const val KIND_WEBOS = "webos"
     }
 }
 
