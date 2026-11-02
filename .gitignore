@@ -14,3 +14,6 @@ android/.idea/
 .kotlin/
 
 .DS_Store
+
+# Personal device audits (installed apps, device logs) — never publish
+device-audit/
