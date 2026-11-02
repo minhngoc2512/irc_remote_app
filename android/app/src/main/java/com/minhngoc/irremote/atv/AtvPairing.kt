@@ -1,5 +1,7 @@
 package com.minhngoc.irremote.atv
 
+import androidx.annotation.StringRes
+import com.minhngoc.irremote.R
 import java.io.Closeable
 import java.io.IOException
 import java.math.BigInteger
@@ -8,7 +10,8 @@ import java.security.MessageDigest
 import java.security.interfaces.RSAPublicKey
 import javax.net.ssl.SSLSocket
 
-class PairingException(message: String) : IOException(message)
+/** [res] is the user-facing explanation, shown in the app language. */
+class PairingException(message: String, @StringRes val res: Int, vararg val args: Any) : IOException(message)
 
 /**
  * Pairing on port 6467 (polo.proto). [start] makes the TV show a 6-character
@@ -54,9 +57,9 @@ class AtvPairing(private val host: String, private val identity: AtvIdentity, pr
     }
 
     fun finish(code: String) {
-        val s = socket ?: throw PairingException("Chưa bắt đầu ghép nối")
+        val s = socket ?: throw PairingException("pairing not started", R.string.pair_not_started)
         val pin = code.trim().uppercase()
-        if (!pin.matches(Regex("[0-9A-F]{6}"))) throw PairingException("Mã gồm 6 ký tự 0-9, A-F")
+        if (!pin.matches(Regex("[0-9A-F]{6}"))) throw PairingException("bad code format", R.string.pair_code_format)
         val server = s.session.peerCertificates.first().publicKey as RSAPublicKey
         val client = identity.publicKey
         val digest = MessageDigest.getInstance("SHA-256").run {
@@ -68,7 +71,7 @@ class AtvPairing(private val host: String, private val identity: AtvIdentity, pr
             digest()
         }
         // The first two characters are a checksum of the rest: catches typos before the TV does.
-        if ((digest[0].toInt() and 0xFF) != pin.substring(0, 2).toInt(16)) throw PairingException("Mã không đúng, kiểm tra lại trên TV")
+        if ((digest[0].toInt() and 0xFF) != pin.substring(0, 2).toInt(16)) throw PairingException("code checksum mismatch", R.string.pair_code_mismatch)
         send { message(40) { bytes(1, digest) } } // secret
         expect(41) // secret_ack
     }
@@ -87,9 +90,10 @@ class AtvPairing(private val host: String, private val identity: AtvIdentity, pr
         val msg = ProtoMessage.parse(socket!!.inputStream.readFrame())
         val status = msg.long(2)
         if (status != STATUS_OK) {
-            throw PairingException(if (status == 402L) "Mã không đúng" else "TV từ chối ghép nối (mã lỗi $status)")
+            throw if (status == 402L) PairingException("wrong code", R.string.pair_wrong_code)
+            else PairingException("pairing status $status", R.string.pair_refused, status.toInt())
         }
-        if (!msg.has(field)) throw PairingException("TV trả lời không đúng giao thức")
+        if (!msg.has(field)) throw PairingException("missing field $field", R.string.pair_protocol)
         return msg
     }
 

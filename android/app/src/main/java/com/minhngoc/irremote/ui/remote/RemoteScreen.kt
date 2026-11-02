@@ -1,5 +1,8 @@
 package com.minhngoc.irremote.ui.remote
 
+import com.minhngoc.irremote.ui.theme.name
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -114,13 +117,13 @@ fun RemoteScreen(nav: Navigator, device: UserDevice) {
         } else if (rest.isNotEmpty()) {
             TextButton(onClick = { showMore = true }) {
                 Icon(Icons.Filled.MoreHoriz, null, tint = style.accent)
-                Text("  Nút khác (${rest.size})", color = style.accent, style = MaterialTheme.typography.labelLarge)
+                Text("  " + stringResource(R.string.more_keys_count, rest.size), color = style.accent, style = MaterialTheme.typography.labelLarge)
             }
         }
         if (showMore) {
             ModalBottomSheet(onDismissRequest = { showMore = false }, containerColor = palette.body) {
-                Text("Nút khác", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp))
-                Text("Các nút riêng của thiết bị, giữ nguyên tên trong bộ mã.", style = MaterialTheme.typography.bodySmall,
+                Text(stringResource(R.string.more_keys), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 20.dp))
+                Text(stringResource(R.string.more_keys_sub), style = MaterialTheme.typography.bodySmall,
                     color = palette.inkSoft, modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                 Box(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) { LabelKeys(rest) }
             }
@@ -148,7 +151,7 @@ fun RemoteFrame(
     Surface(color = palette.room, contentColor = palette.ink, modifier = Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp, end = 12.dp, top = 4.dp)) {
-                IconButton(onClick = nav::pop) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại") }
+                IconButton(onClick = nav::pop) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back)) }
                 Box(Modifier.size(36.dp).clip(RoundedCornerShape(11.dp)).background(style.accent), contentAlignment = Alignment.Center) {
                     Icon(style.icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
@@ -224,9 +227,9 @@ private fun MediaLayout(all: List<IrButton>, accent: Color, mediaFirst: Boolean)
     if (mediaFirst) MediaKeys(p)
 
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Rocker("Âm lượng", p["VOL_UP"], p["VOL_DOWN"], width = 58.dp, captionIcon = Icons.AutoMirrored.Filled.VolumeUp)
+        Rocker(stringResource(R.string.volume), p["VOL_UP"], p["VOL_DOWN"], width = 58.dp, captionIcon = Icons.AutoMirrored.Filled.VolumeUp)
         DPad(p["UP"], p["DOWN"], p["LEFT"], p["RIGHT"], p["OK"], accent, size = 172.dp)
-        Rocker("Kênh", p["CH_UP"], p["CH_DOWN"], width = 58.dp)
+        Rocker(stringResource(R.string.channel), p["CH_UP"], p["CH_DOWN"], width = 58.dp)
     }
     KeyRow(p.all("BACK", "HOME", "MENU", "EXIT"))
     if (!mediaFirst) MediaKeys(p)
@@ -240,7 +243,7 @@ private fun MediaLayout(all: List<IrButton>, accent: Color, mediaFirst: Boolean)
             modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable { digitsOpen = !digitsOpen }.padding(8.dp),
         ) {
             Icon(Icons.Filled.Dialpad, null, tint = palette.inkSoft)
-            Text("Bàn phím số", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 10.dp).weight(1f))
+            Text(stringResource(R.string.number_pad), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 10.dp).weight(1f))
             Icon(if (digitsOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = palette.inkSoft)
         }
         AnimatedVisibility(digitsOpen) {
@@ -277,11 +280,11 @@ private fun FanLayout(all: List<IrButton>, accent: Color): List<IrButton> {
     if (p["SPEED_UP"] != null || p["SPEED_DOWN"] != null) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             p["SPEED_DOWN"]?.let { IrKey(it, Modifier.size(64.dp), shape = CircleShape) }
-            Text("Tốc độ", style = MaterialTheme.typography.titleMedium, color = palette.inkSoft)
+            Text(stringResource(R.string.speed), style = MaterialTheme.typography.titleMedium, color = palette.inkSoft)
             p["SPEED_UP"]?.let { IrKey(it, Modifier.size(64.dp), shape = CircleShape, container = accent, contentColor = Color.White) }
         }
     }
-    FeatureTiles(listOf("FAN_SPEED" to "Tốc độ gió", "SWING" to "Xoay", "TIMER" to "Hẹn giờ", "MODE" to "Chế độ", "SLEEP" to "Ngủ"), p, accent)
+    FeatureTiles(listOf("FAN_SPEED" to stringResource(R.string.fan_speed), "SWING" to stringResource(R.string.oscillate), "TIMER" to stringResource(R.string.timer), "MODE" to stringResource(R.string.mode), "SLEEP" to stringResource(R.string.sleep)), p, accent)
     return p.rest
 }
 
@@ -352,14 +355,14 @@ private fun LightLayout(all: List<IrButton>, accent: Color): List<IrButton> {
     }
     val swatches = all.filter { swatchColor(it) != null }
     if (swatches.isNotEmpty()) {
-        Text("Màu", style = MaterialTheme.typography.titleSmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
+        Text(stringResource(R.string.colors), style = MaterialTheme.typography.titleSmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             swatches.forEach { b ->
                 IrKey(b, Modifier.size(52.dp), shape = CircleShape, container = swatchColor(b)!!, elevation = 4.dp) {}
             }
         }
     }
-    FeatureTiles(listOf("MODE" to "Chế độ", "TIMER" to "Hẹn giờ"), p, accent)
+    FeatureTiles(listOf("MODE" to stringResource(R.string.mode), "TIMER" to stringResource(R.string.timer)), p, accent)
     return p.rest - swatches.toSet()
 }
 
@@ -385,7 +388,7 @@ private fun AudioLayout(all: List<IrButton>, accent: Color): List<IrButton> {
                 }
             }
             Box(Modifier.size(width = 90.dp, height = 26.dp).clip(CircleShape).background(palette.body), contentAlignment = Alignment.Center) {
-                Text("Âm lượng", style = MaterialTheme.typography.labelSmall, color = palette.inkSoft)
+                Text(stringResource(R.string.volume), style = MaterialTheme.typography.labelSmall, color = palette.inkSoft)
             }
         }
     }

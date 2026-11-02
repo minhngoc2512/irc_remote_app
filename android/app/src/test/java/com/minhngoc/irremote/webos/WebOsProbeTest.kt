@@ -59,7 +59,7 @@ class WebOsProbeTest {
         println("mac=${FileStore(File(storePath)).mac(host)}")
         val inputs = kotlinx.coroutines.runBlocking { client.inputs() }
         println("inputs=${inputs.joinToString { "${it.label}(${it.id})" }}")
-        client.toast("IR Remote đã kết nối")
+        client.toast("EzRemote connected")
         Thread.sleep(1_500)
         client.release()
         client.disconnect()

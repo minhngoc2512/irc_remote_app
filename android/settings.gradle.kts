@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "IrRemote"
+rootProject.name = "EzRemote"
 include(":app")

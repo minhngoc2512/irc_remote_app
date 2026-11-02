@@ -1,5 +1,7 @@
 package com.minhngoc.irremote.ui.remote
 
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
 import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -146,8 +148,11 @@ fun prettyLabel(label: String): String {
 
 /** Short text for keys whose function is better read than drawn. */
 private val FUNC_TEXT = mapOf(
-    "OK" to "OK", "MODE" to "Chế độ", "FAN_SPEED" to "Gió", "POWER_ON" to "Bật", "POWER_OFF" to "Tắt",
+    "OK" to "OK",
 ) + (0..9).associate { "DIGIT_$it" to "$it" }
+private val FUNC_TEXT_RES = mapOf(
+    "MODE" to R.string.mode, "FAN_SPEED" to R.string.fan, "POWER_ON" to R.string.on, "POWER_OFF" to R.string.off,
+)
 
 val KEY_COLORS = mapOf(
     "RED" to Color(0xFFE5484D), "GREEN" to Color(0xFF30A46C),
@@ -191,7 +196,7 @@ fun IrKey(
                     fun sendOnce() {
                         sent = true
                         if (!(sender?.press(button) ?: ir.send(button as IrButton))) {
-                            val why = if (sender != null) "Chưa kết nối được với TV" else "Điện thoại không có cổng hồng ngoại"
+                            val why = if (sender != null) R.string.not_connected_tv else R.string.no_ir
                             Toast.makeText(context, why, Toast.LENGTH_SHORT).show()
                         }
                     }
@@ -222,7 +227,7 @@ private fun lerpPressed(container: Color, pressed: Color): Color =
 @Composable
 fun KeyFace(button: KeySpec, iconSize: Dp = 24.dp) {
     val icon = funcIcon(button.funcKey)
-    val text = FUNC_TEXT[button.funcKey]
+    val text = FUNC_TEXT[button.funcKey] ?: FUNC_TEXT_RES[button.funcKey]?.let { stringResource(it) }
     when {
         button.funcKey in KEY_COLORS -> Unit // the key's color is its label
         text != null -> Text(text, style = MaterialTheme.typography.titleMedium)
@@ -243,7 +248,7 @@ fun KeyFace(button: KeySpec, iconSize: Dp = 24.dp) {
 fun PowerKey(button: KeySpec, size: Dp = 64.dp) {
     val palette = LocalPalette.current
     IrKey(button, Modifier.size(size), shape = CircleShape, container = palette.power, contentColor = Color.White, elevation = 6.dp) {
-        Icon(Icons.Filled.PowerSettingsNew, contentDescription = "Nguồn", modifier = Modifier.size(size * 0.42f))
+        Icon(Icons.Filled.PowerSettingsNew, contentDescription = stringResource(R.string.power), modifier = Modifier.size(size * 0.42f))
     }
 }
 

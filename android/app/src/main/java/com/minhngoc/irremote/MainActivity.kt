@@ -1,5 +1,6 @@
 package com.minhngoc.irremote
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +23,8 @@ import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private var deps by mutableStateOf<AppDeps?>(null)
+
+    override fun attachBaseContext(newBase: Context) = super.attachBaseContext(AppLanguage.wrap(newBase))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()

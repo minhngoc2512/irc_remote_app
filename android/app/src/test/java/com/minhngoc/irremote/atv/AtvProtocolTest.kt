@@ -31,7 +31,7 @@ class AtvProtocolTest {
         val host = System.getenv("ATV_HOST")
         assumeTrue("set ATV_HOST to probe a real TV", !host.isNullOrBlank())
         val id = AtvIdentity.load(Files.createTempDirectory("atv").toFile())
-        AtvPairing(host!!, id).use { it.start("IR Remote test") }
+        AtvPairing(host!!, id).use { it.start("EzRemote test") }
     }
 }
 

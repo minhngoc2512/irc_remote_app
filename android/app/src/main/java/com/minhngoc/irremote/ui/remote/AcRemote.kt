@@ -1,6 +1,9 @@
 package com.minhngoc.irremote.ui.remote
 
 import android.content.Context
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -113,23 +116,37 @@ fun acButtonFor(byState: Map<String, IrButton>, state: AcState): IrButton? =
         ?: byState[state.copy(swing = false, fan = "auto").key]
         ?: (if (!state.power) byState["power=0"] else null)
 
-fun acModeLabel(mode: String): String = MODES.firstOrNull { it.key == mode }?.label ?: mode
+@Composable
+fun acModeLabel(mode: String): String = MODES.firstOrNull { it.key == mode }?.let { stringResource(it.label) } ?: mode
+
+/** "Cool 25°C, fan auto" for an A/C state key from the database, in the app language. */
+@Composable
+fun acStateLabel(params: String): String {
+    if (params.startsWith("power=0")) return stringResource(R.string.off)
+    val state = AcState.parse(params) ?: return params
+    val fan = FANS.firstOrNull { it.first == state.fan }?.let { stringResource(it.second) } ?: state.fan
+    val base = when {
+        state.mode == "fan" -> stringResource(R.string.ac_state_fan, fan)
+        else -> stringResource(R.string.ac_state, acModeLabel(state.mode), state.temp, fan)
+    }
+    return if (state.swing) stringResource(R.string.ac_state_swing, base) else base
+}
 
 private const val MIN_TEMP = 16
 private const val MAX_TEMP = 30
 private const val ARC_START = 135f
 private const val ARC_SWEEP = 270f
 
-private data class AcMode(val key: String, val label: String, val icon: ImageVector, val color: Color)
+private data class AcMode(val key: String, @StringRes val label: Int, val icon: ImageVector, val color: Color)
 
 private val MODES = listOf(
-    AcMode("cool", "Lạnh", Icons.Filled.AcUnit, Color(0xFF1FA5C9)),
-    AcMode("heat", "Sưởi", Icons.Filled.WbSunny, Color(0xFFF08A24)),
-    AcMode("dry", "Hút ẩm", Icons.Filled.WaterDrop, Color(0xFF7A6CF0)),
-    AcMode("fan", "Quạt", Icons.Filled.WindPower, Color(0xFF2FAE73)),
-    AcMode("auto", "Tự động", Icons.Filled.Autorenew, Color(0xFF5B6B7C)),
+    AcMode("cool", R.string.ac_cool, Icons.Filled.AcUnit, Color(0xFF1FA5C9)),
+    AcMode("heat", R.string.ac_heat, Icons.Filled.WbSunny, Color(0xFFF08A24)),
+    AcMode("dry", R.string.ac_dry, Icons.Filled.WaterDrop, Color(0xFF7A6CF0)),
+    AcMode("fan", R.string.ac_fan, Icons.Filled.WindPower, Color(0xFF2FAE73)),
+    AcMode("auto", R.string.ac_auto, Icons.Filled.Autorenew, Color(0xFF5B6B7C)),
 )
-private val FANS = listOf("auto" to "Tự động", "low" to "Thấp", "medium" to "Vừa", "high" to "Cao")
+private val FANS = listOf("auto" to R.string.fan_auto, "low" to R.string.fan_low, "medium" to R.string.fan_medium, "high" to R.string.fan_high)
 
 /**
  * State-based A/C control for codesets generated from IRremoteESP8266: each
@@ -149,24 +166,24 @@ fun AcRemote(buttons: List<IrButton>, deviceId: Long) {
     fun apply(next: AcState) {
         state = next
         AcMemory.save(context, deviceId, next)
-        val button = acButtonFor(byState, next) ?: return Toast.makeText(context, "Bộ mã không hỗ trợ tổ hợp này", Toast.LENGTH_SHORT).show()
-        if (!ir.send(button)) Toast.makeText(context, "Điện thoại không có cổng hồng ngoại", Toast.LENGTH_SHORT).show()
+        val button = acButtonFor(byState, next) ?: return Toast.makeText(context, R.string.combo_unsupported, Toast.LENGTH_SHORT).show()
+        if (!ir.send(button)) Toast.makeText(context, R.string.no_ir, Toast.LENGTH_SHORT).show()
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
         TemperatureDial(
             state = state,
-            modeLabel = mode.label,
+            modeLabel = stringResource(mode.label),
             accent = accent,
             onTemp = { apply(state.copy(power = true, temp = it)) },
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            StepKey(Icons.Filled.Remove, "Giảm nhiệt độ") {
+            StepKey(Icons.Filled.Remove, stringResource(R.string.temp_down)) {
                 apply(state.copy(power = true, temp = (state.temp - 1).coerceAtLeast(MIN_TEMP)))
             }
             PowerToggle(on = state.power, onClick = { apply(state.copy(power = !state.power)) })
-            StepKey(Icons.Filled.Add, "Tăng nhiệt độ") {
+            StepKey(Icons.Filled.Add, stringResource(R.string.temp_up)) {
                 apply(state.copy(power = true, temp = (state.temp + 1).coerceAtMost(MAX_TEMP)))
             }
         }
@@ -188,14 +205,14 @@ fun AcRemote(buttons: List<IrButton>, deviceId: Long) {
                         .padding(vertical = 10.dp),
                 ) {
                     Icon(m.icon, null, tint = if (selected) Color.White else palette.inkSoft, modifier = Modifier.size(22.dp))
-                    Text(m.label, style = MaterialTheme.typography.labelSmall, color = if (selected) Color.White else palette.inkSoft)
+                    Text(stringResource(m.label), style = MaterialTheme.typography.labelSmall, color = if (selected) Color.White else palette.inkSoft)
                 }
             }
         }
 
         // Fan speed as rising bars, like the LCD on the physical remote.
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Tốc độ gió", style = MaterialTheme.typography.titleSmall, color = palette.inkSoft)
+            Text(stringResource(R.string.fan_speed), style = MaterialTheme.typography.titleSmall, color = palette.inkSoft)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 FANS.forEachIndexed { i, (key, label) ->
                     val selected = state.fan == key
@@ -210,7 +227,7 @@ fun AcRemote(buttons: List<IrButton>, deviceId: Long) {
                     ) {
                         FanBars(level = i, color = if (selected) accent else palette.inkSoft.copy(alpha = 0.6f))
                         Spacer(Modifier.height(6.dp))
-                        Text(label, style = MaterialTheme.typography.labelMedium, color = if (selected) accent else palette.inkSoft)
+                        Text(stringResource(label), style = MaterialTheme.typography.labelMedium, color = if (selected) accent else palette.inkSoft)
                     }
                 }
             }
@@ -222,7 +239,7 @@ fun AcRemote(buttons: List<IrButton>, deviceId: Long) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Icon(Icons.Filled.SwapVert, null, tint = palette.inkSoft)
-            Text("Đảo gió", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 12.dp).weight(1f))
+            Text(stringResource(R.string.swing), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 12.dp).weight(1f))
             Switch(
                 checked = state.swing,
                 onCheckedChange = { apply(state.copy(power = true, swing = it)) },
@@ -289,12 +306,12 @@ private fun TemperatureDial(state: AcState, modeLabel: String, accent: Color, on
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                if (state.mode == "fan" && state.power) "Quạt" else "$shown°",
+                if (state.mode == "fan" && state.power) stringResource(R.string.ac_fan) else "$shown°",
                 style = MaterialTheme.typography.displayLarge,
                 color = if (state.power) palette.ink else palette.inkSoft,
             )
             Text(
-                if (state.power) modeLabel else "Đang tắt",
+                if (state.power) modeLabel else stringResource(R.string.ac_is_off),
                 style = MaterialTheme.typography.titleMedium,
                 color = accent,
             )
@@ -312,9 +329,9 @@ private fun PowerToggle(on: Boolean, onClick: () -> Unit) {
             modifier = Modifier.size(76.dp).shadow(6.dp, CircleShape, spotColor = palette.shadow).clip(CircleShape)
                 .background(color).clickable(onClick = onClick),
         ) {
-            Icon(Icons.Filled.PowerSettingsNew, contentDescription = if (on) "Tắt" else "Bật", tint = Color.White, modifier = Modifier.size(34.dp))
+            Icon(Icons.Filled.PowerSettingsNew, contentDescription = stringResource(if (on) R.string.off else R.string.on), tint = Color.White, modifier = Modifier.size(34.dp))
         }
-        Text(if (on) "Tắt" else "Bật", style = MaterialTheme.typography.labelMedium, color = palette.inkSoft,
+        Text(stringResource(if (on) R.string.off else R.string.on), style = MaterialTheme.typography.labelMedium, color = palette.inkSoft,
             modifier = Modifier.padding(top = 6.dp))
     }
 }

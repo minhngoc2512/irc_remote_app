@@ -1,5 +1,7 @@
 package com.minhngoc.irremote.ui.atv
 
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -77,7 +79,7 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
     var state by remember { mutableStateOf(VoiceState.Idle) }
     var listening by remember { mutableStateOf(false) }
     val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) Toast.makeText(context, "Đã cho phép micro, chạm lại để nói", Toast.LENGTH_SHORT).show()
+        if (granted) Toast.makeText(context, R.string.mic_granted, Toast.LENGTH_SHORT).show()
     }
     val pulse by rememberInfiniteTransition(label = "voice").animateFloat(
         1f, 1.05f, infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "pulse",
@@ -88,7 +90,7 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
         val session = client.startVoice()
         if (session == null) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "TV không mở trợ lý giọng nói", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, R.string.tv_no_assistant, Toast.LENGTH_SHORT).show()
             }
             return@withContext
         }
@@ -154,15 +156,15 @@ fun HoldToTalk(client: AtvRemote, accent: Color) {
             .scale(if (state == VoiceState.Listening) pulse else 1f)
             .clip(RoundedCornerShape(30.dp))
             .background(if (state == VoiceState.Idle) palette.key else accent)
-            .clickable(onClickLabel = "Nói với TV") { toggle() },
+            .clickable(onClickLabel = stringResource(R.string.talk_to_tv)) { toggle() },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Mic, null, tint = if (state == VoiceState.Idle) accent else Color.White, modifier = Modifier.size(26.dp))
             Text(
                 when (state) {
-                    VoiceState.Idle -> "Chạm để nói với TV"
-                    VoiceState.Opening -> "Đang mở trợ lý…"
-                    VoiceState.Listening -> "Đang nghe… chạm để gửi"
+                    VoiceState.Idle -> stringResource(R.string.tap_to_talk)
+                    VoiceState.Opening -> stringResource(R.string.opening_assistant)
+                    VoiceState.Listening -> stringResource(R.string.listening_tap_send)
                 },
                 style = MaterialTheme.typography.labelLarge,
                 color = if (state == VoiceState.Idle) palette.ink else Color.White,
@@ -185,12 +187,12 @@ fun DictateButton(onText: (String) -> Unit) {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "vi-VN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "Nói nội dung cần gõ lên TV")
+            putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.dictate_prompt))
         }
         try {
             launcher.launch(intent)
         } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Điện thoại chưa có dịch vụ nhận dạng giọng nói", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.no_speech_service, Toast.LENGTH_SHORT).show()
         }
-    }) { Icon(Icons.Filled.Mic, contentDescription = "Nhập bằng giọng nói", modifier = Modifier.size(24.dp).clip(CircleShape)) }
+    }) { Icon(Icons.Filled.Mic, contentDescription = stringResource(R.string.voice_typing), modifier = Modifier.size(24.dp).clip(CircleShape)) }
 }

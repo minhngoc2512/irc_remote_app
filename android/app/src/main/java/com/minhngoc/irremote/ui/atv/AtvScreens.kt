@@ -1,5 +1,9 @@
 package com.minhngoc.irremote.ui.atv
 
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
+import androidx.annotation.StringRes
+import com.minhngoc.irremote.atv.PairingException
 import android.os.Build
 import android.view.KeyEvent
 import androidx.compose.foundation.background
@@ -90,16 +94,16 @@ data class AtvKey(override val funcKey: String, val keyCode: Int, override val l
 }
 
 private val KEYS = listOf(
-    AtvKey("POWER", KeyEvent.KEYCODE_POWER, "Nguồn"),
-    AtvKey("INPUT", KeyEvent.KEYCODE_TV_INPUT, "Nguồn vào"),
-    AtvKey("MUTE", KeyEvent.KEYCODE_VOLUME_MUTE, "Tắt tiếng"),
+    AtvKey("POWER", KeyEvent.KEYCODE_POWER, "Power"),
+    AtvKey("INPUT", KeyEvent.KEYCODE_TV_INPUT, "Input"),
+    AtvKey("MUTE", KeyEvent.KEYCODE_VOLUME_MUTE, "Mute"),
     AtvKey("VOL_UP", KeyEvent.KEYCODE_VOLUME_UP), AtvKey("VOL_DOWN", KeyEvent.KEYCODE_VOLUME_DOWN),
     AtvKey("CH_UP", KeyEvent.KEYCODE_CHANNEL_UP), AtvKey("CH_DOWN", KeyEvent.KEYCODE_CHANNEL_DOWN),
     AtvKey("UP", KeyEvent.KEYCODE_DPAD_UP), AtvKey("DOWN", KeyEvent.KEYCODE_DPAD_DOWN),
     AtvKey("LEFT", KeyEvent.KEYCODE_DPAD_LEFT), AtvKey("RIGHT", KeyEvent.KEYCODE_DPAD_RIGHT),
     AtvKey("OK", KeyEvent.KEYCODE_DPAD_CENTER),
-    AtvKey("BACK", KeyEvent.KEYCODE_BACK, "Quay lại"), AtvKey("HOME", KeyEvent.KEYCODE_HOME, "Màn hình chính"),
-    AtvKey("SETTINGS", KeyEvent.KEYCODE_SETTINGS, "Cài đặt"),
+    AtvKey("BACK", KeyEvent.KEYCODE_BACK, "Back"), AtvKey("HOME", KeyEvent.KEYCODE_HOME, "Home"),
+    AtvKey("SETTINGS", KeyEvent.KEYCODE_SETTINGS, "Settings"),
     AtvKey("REWIND", KeyEvent.KEYCODE_MEDIA_REWIND), AtvKey("PLAY_PAUSE", KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE),
     AtvKey("FAST_FORWARD", KeyEvent.KEYCODE_MEDIA_FAST_FORWARD),
     AtvKey("PREV", KeyEvent.KEYCODE_MEDIA_PREVIOUS), AtvKey("NEXT", KeyEvent.KEYCODE_MEDIA_NEXT),
@@ -129,8 +133,11 @@ private sealed interface PairStep {
 fun AtvAddScreen(nav: Navigator) {
     val deps = LocalDeps.current
     val palette = LocalPalette.current
+    val context = LocalContext.current
     val style = deviceStyle("atv")
     var step by remember { mutableStateOf<PairStep>(PairStep.Pick) }
+    fun explain(e: Exception, @StringRes fallback: Int, vararg args: Any): String =
+        (e as? PairingException)?.let { context.getString(it.res, *it.args) } ?: context.getString(fallback, *args)
     var pairing by remember { mutableStateOf<AtvPairing?>(null) }
     val scope = rememberCoroutineScope()
     DisposableEffect(Unit) { onDispose { pairing?.close() } }
@@ -147,12 +154,12 @@ fun AtvAddScreen(nav: Navigator) {
                 }
                 PairStep.EnterCode(tv)
             } catch (e: Exception) {
-                PairStep.Failed(tv, e.message ?: "Không kết nối được tới ${tv.host}")
+                PairStep.Failed(tv, explain(e, R.string.cannot_reach_host, tv.host))
             }
         }
     }
 
-    AppScaffold("Android TV qua Wi-Fi", nav, subtitle = "Mi Box, Google TV, TV chạy Android", style = style) { padding ->
+    AppScaffold(stringResource(R.string.atv_tile_title), nav, subtitle = stringResource(R.string.atv_add_sub), style = style) { padding ->
         Column(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -161,17 +168,17 @@ fun AtvAddScreen(nav: Navigator) {
                 PairStep.Pick -> PickTv(onPick = ::begin)
                 is PairStep.Connecting -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 24.dp)) {
                     CircularProgressIndicator(color = style.accent, modifier = Modifier.size(28.dp))
-                    Text("Đang kết nối tới ${s.tv.name}…", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
+                    Text(stringResource(R.string.connecting_to, s.tv.name), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
                 }
                 is PairStep.Failed -> {
-                    Text("Không ghép nối được", style = MaterialTheme.typography.headlineSmall)
+                    Text(stringResource(R.string.pair_failed_title), style = MaterialTheme.typography.headlineSmall)
                     Text(s.message, style = MaterialTheme.typography.bodyMedium, color = palette.inkSoft)
-                    Text("Kiểm tra điện thoại và TV cùng một mạng Wi-Fi, TV đang bật.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
-                    Button(onClick = { begin(s.tv) }, colors = ButtonDefaults.buttonColors(containerColor = style.accent)) { Text("Thử lại") }
-                    TextButton(onClick = { step = PairStep.Pick }) { Text("Chọn TV khác") }
+                    Text(stringResource(R.string.check_same_wifi), style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
+                    Button(onClick = { begin(s.tv) }, colors = ButtonDefaults.buttonColors(containerColor = style.accent)) { Text(stringResource(R.string.retry)) }
+                    TextButton(onClick = { step = PairStep.Pick }) { Text(stringResource(R.string.pick_other_tv)) }
                 }
                 is PairStep.EnterCode -> EnterCode(s.tv) { code ->
-                    val p = pairing ?: return@EnterCode "Mất kết nối, thử lại"
+                    val p = pairing ?: return@EnterCode context.getString(R.string.connection_lost_retry)
                     try {
                         withContext(Dispatchers.IO) { p.finish(code) }
                         val device = withContext(Dispatchers.IO) {
@@ -182,7 +189,7 @@ fun AtvAddScreen(nav: Navigator) {
                         nav.resetTo(Screen.Home, Screen.Remote(device))
                         null
                     } catch (e: Exception) {
-                        e.message ?: "Ghép nối thất bại"
+                        explain(e, R.string.pair_failed_title)
                     }
                 }
             }
@@ -198,11 +205,11 @@ private fun PickTv(onPick: (FoundTv) -> Unit) {
     val found by remember { AtvDiscovery.scan(context) }.collectAsState(initial = emptyList())
     var manual by remember { mutableStateOf("") }
 
-    Text("TV trong mạng nhà bạn", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+    Text(stringResource(R.string.tvs_on_network), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
     if (found.isEmpty()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             CircularProgressIndicator(color = style.accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-            Text("Đang tìm… Hãy bật TV và nối cùng Wi-Fi với điện thoại.", style = MaterialTheme.typography.bodySmall,
+            Text(stringResource(R.string.searching_atv), style = MaterialTheme.typography.bodySmall,
                 color = palette.inkSoft, modifier = Modifier.padding(start = 12.dp))
         }
     }
@@ -221,14 +228,14 @@ private fun PickTv(onPick: (FoundTv) -> Unit) {
             Column(Modifier.padding(start = 14.dp)) {
                 Text(tv.name, style = MaterialTheme.typography.titleSmall)
                 // Picking a saved box re-pairs it; the existing entry is kept, not duplicated.
-                Text(if (existing) "${tv.host} · Đã có trong Thiết bị của tôi, chạm để ghép nối lại" else tv.host,
+                Text(if (existing) stringResource(R.string.already_saved_repair, tv.host) else tv.host,
                     style = MaterialTheme.typography.bodySmall, color = if (existing) style.accent else palette.inkSoft)
             }
         }
     }
 
-    Text("Hoặc nhập địa chỉ IP của TV", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
-    Text("Xem trong Cài đặt → Mạng & Internet trên TV.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
+    Text(stringResource(R.string.or_enter_ip), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+    Text(stringResource(R.string.atv_ip_hint), style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = manual, onValueChange = { manual = it.filter { c -> c.isDigit() || c == '.' } },
@@ -241,7 +248,7 @@ private fun PickTv(onPick: (FoundTv) -> Unit) {
             enabled = manual.count { it == '.' } == 3,
             colors = ButtonDefaults.buttonColors(containerColor = style.accent),
             modifier = Modifier.padding(start = 10.dp),
-        ) { Text("Kết nối") }
+        ) { Text(stringResource(R.string.connect)) }
     }
 }
 
@@ -258,8 +265,8 @@ private fun EnterCode(tv: FoundTv, submit: suspend (String) -> String?) {
         scope.launch { error = submit(code); busy = false }
     }
 
-    Text("Nhập mã trên TV", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 8.dp))
-    Text("${tv.name} đang hiện một mã 6 ký tự (số và chữ A–F).", style = MaterialTheme.typography.bodyMedium, color = palette.inkSoft)
+    Text(stringResource(R.string.enter_tv_code), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 8.dp))
+    Text(stringResource(R.string.tv_shows_code, tv.name), style = MaterialTheme.typography.bodyMedium, color = palette.inkSoft)
     OutlinedTextField(
         value = code,
         onValueChange = { v -> code = v.uppercase().filter { it in "0123456789ABCDEF" }.take(6); error = null },
@@ -277,7 +284,7 @@ private fun EnterCode(tv: FoundTv, submit: suspend (String) -> String?) {
         colors = ButtonDefaults.buttonColors(containerColor = style.accent),
         contentPadding = PaddingValues(vertical = 16.dp),
         modifier = Modifier.fillMaxWidth(),
-    ) { Text(if (busy) "Đang ghép nối…" else "Ghép nối") }
+    ) { Text(stringResource(if (busy) R.string.pairing_progress else R.string.pair)) }
 }
 
 // --- Remote ------------------------------------------------------------------------------------
@@ -338,13 +345,13 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
                 Touchpad(client, style.accent)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                HRocker("Âm lượng", k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f), icon = Icons.AutoMirrored.Filled.VolumeUp)
-                HRocker("Kênh", k("CH_DOWN"), k("CH_UP"), Modifier.weight(1f))
+                HRocker(stringResource(R.string.volume), k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f), icon = Icons.AutoMirrored.Filled.VolumeUp)
+                HRocker(stringResource(R.string.channel_short), k("CH_DOWN"), k("CH_UP"), Modifier.weight(1f))
             }
             // Boxes that pass audio over HDMI report 0/0: nothing useful to show.
             volume?.takeIf { it.max > 0 }?.let { v ->
                 Text(
-                    if (v.muted) "Đang tắt tiếng" else "Âm lượng ${v.level} / ${v.max}",
+                    if (v.muted) stringResource(R.string.muted) else stringResource(R.string.volume_level_of, v.level, v.max),
                     style = MaterialTheme.typography.labelMedium, color = palette.inkSoft,
                 )
             }
@@ -352,7 +359,7 @@ fun AtvRemoteScreen(nav: Navigator, device: UserDevice) {
             KeyRow(listOf(k("BACK"), k("HOME"), k("SETTINGS")))
             KeyRow(listOf(k("PREV"), k("REWIND"), k("PLAY_PAUSE"), k("FAST_FORWARD"), k("NEXT")))
 
-            Text("Mở ứng dụng", style = MaterialTheme.typography.titleSmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
+            Text(stringResource(R.string.open_app), style = MaterialTheme.typography.titleSmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 APPS.forEach { app ->
                     Row(
@@ -385,20 +392,19 @@ private fun TypeToTv(client: AtvRemote) {
         OutlinedTextField(
             value = text, onValueChange = { text = it; edited = true }, singleLine = true,
             leadingIcon = { Icon(Icons.Filled.Keyboard, null, tint = palette.inkSoft) },
-            placeholder = { Text("Gõ chữ lên TV") },
+            placeholder = { Text(stringResource(R.string.type_on_tv)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { client.sendKey(KeyEvent.KEYCODE_ENTER) }),
             modifier = Modifier.weight(1f),
         )
         DictateButton { spoken -> text = spoken; edited = true }
         IconButton(onClick = { client.sendKey(KeyEvent.KEYCODE_ENTER) }, enabled = text.isNotEmpty()) {
-            Icon(Icons.AutoMirrored.Filled.Send, "Tìm / Enter trên TV")
+            Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.enter_on_tv))
         }
     }
     val fieldOpen by client.textFieldOpen.collectAsState()
     Text(
-        if (fieldOpen) "TV đang mở ô nhập chữ: chữ gõ hoặc đọc ở đây hiện ngay trên TV."
-        else "Chưa thấy ô nhập chữ trên TV. Mở ô tìm kiếm trên TV để bàn phím ảo hiện lên.",
+        stringResource(if (fieldOpen) R.string.tv_field_open else R.string.tv_field_closed),
         style = MaterialTheme.typography.bodySmall,
         color = if (fieldOpen) Color(0xFF30A46C) else palette.inkSoft,
         modifier = Modifier.fillMaxWidth(),
@@ -411,9 +417,9 @@ private fun ConnectionBanner(client: AtvRemote, onRepair: () -> Unit) {
     val state by client.state.collectAsState()
     val (text, color) = when (state) {
         AtvRemote.State.Connected -> return
-        AtvRemote.State.Idle, AtvRemote.State.Connecting -> "Đang kết nối tới TV…" to palette.inkSoft
-        AtvRemote.State.Unreachable -> "Chưa kết nối được tới TV. Kiểm tra TV đang bật và cùng Wi-Fi với điện thoại; app sẽ tự thử lại." to palette.power
-        AtvRemote.State.NotPaired -> "TV chưa ghép nối với điện thoại này." to palette.power
+        AtvRemote.State.Idle, AtvRemote.State.Connecting -> stringResource(R.string.connecting_tv) to palette.inkSoft
+        AtvRemote.State.Unreachable -> stringResource(R.string.atv_unreachable) to palette.power
+        AtvRemote.State.NotPaired -> stringResource(R.string.atv_not_paired) to palette.power
     }
     val error by client.lastError.collectAsState()
     Row(
@@ -424,7 +430,7 @@ private fun ConnectionBanner(client: AtvRemote, onRepair: () -> Unit) {
             Text(text, style = MaterialTheme.typography.bodySmall, color = color)
             error?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = palette.inkSoft, modifier = Modifier.padding(top = 4.dp)) }
         }
-        if (state == AtvRemote.State.NotPaired) TextButton(onClick = onRepair) { Text("Ghép nối lại") }
+        if (state == AtvRemote.State.NotPaired) TextButton(onClick = onRepair) { Text(stringResource(R.string.pair_again)) }
     }
 }
 
@@ -435,7 +441,7 @@ fun LatencyChip(host: String) {
     val rtt by remember(host) { Latency.monitor(host) }.collectAsState(initial = Float.NaN)
     val (label, dot) = when {
         rtt?.isNaN() == true -> "…" to palette.inkSoft
-        rtt == null -> "mất kết nối" to palette.power
+        rtt == null -> stringResource(R.string.latency_offline) to palette.power
         rtt!! < 50f -> "${rtt!!.roundToInt()} ms" to Color(0xFF30A46C)
         rtt!! < 150f -> "${rtt!!.roundToInt()} ms" to Color(0xFFE8A800)
         else -> "${rtt!!.roundToInt()} ms" to palette.power

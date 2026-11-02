@@ -1,5 +1,7 @@
 package com.minhngoc.irremote.ui.webos
 
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -98,12 +100,12 @@ data class WebOsKey(override val funcKey: String, val button: String, override v
 }
 
 private val KEYS = listOf(
-    WebOsKey("POWER", "POWER", "Nguồn"), WebOsKey("MUTE", "MUTE", "Tắt tiếng"),
+    WebOsKey("POWER", "POWER", "Power"), WebOsKey("MUTE", "MUTE", "Mute"),
     WebOsKey("VOL_UP", "VOLUMEUP"), WebOsKey("VOL_DOWN", "VOLUMEDOWN"),
     WebOsKey("CH_UP", "CHANNELUP"), WebOsKey("CH_DOWN", "CHANNELDOWN"),
     WebOsKey("UP", "UP"), WebOsKey("DOWN", "DOWN"), WebOsKey("LEFT", "LEFT"), WebOsKey("RIGHT", "RIGHT"),
-    WebOsKey("OK", "ENTER"), WebOsKey("BACK", "BACK", "Quay lại"), WebOsKey("HOME", "HOME", "Màn hình chính"),
-    WebOsKey("SETTINGS", "MENU", "Cài đặt nhanh"), WebOsKey("EXIT", "EXIT", "Thoát"),
+    WebOsKey("OK", "ENTER"), WebOsKey("BACK", "BACK", "Back"), WebOsKey("HOME", "HOME", "Home"),
+    WebOsKey("SETTINGS", "MENU", "Quick settings"), WebOsKey("EXIT", "EXIT", "Exit"),
     WebOsKey("REWIND", "REWIND"), WebOsKey("PLAY", "PLAY"), WebOsKey("PAUSE", "PAUSE"),
     WebOsKey("STOP", "STOP"), WebOsKey("FAST_FORWARD", "FASTFORWARD"),
     WebOsKey("RED", "RED"), WebOsKey("GREEN", "GREEN"), WebOsKey("YELLOW", "YELLOW"), WebOsKey("BLUE", "BLUE"),
@@ -125,18 +127,18 @@ fun WebOsAddScreen(nav: Navigator) {
     var manual by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
-    AppScaffold("TV LG (webOS) qua Wi-Fi", nav, subtitle = "Điện thoại và TV cần cùng mạng Wi-Fi", style = style) { padding ->
+    AppScaffold(stringResource(R.string.webos_tile_title), nav, subtitle = stringResource(R.string.webos_add_sub), style = style) { padding ->
         Column(
             Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val tv = picked
             if (tv == null) {
-                Text("TV trong mạng nhà bạn", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.tvs_on_network), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 if (found.isEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(color = style.accent, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-                        Text("Đang tìm… Hãy bật TV.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
+                        Text(stringResource(R.string.searching_webos), style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
                             modifier = Modifier.padding(start = 12.dp))
                     }
                 }
@@ -154,13 +156,13 @@ fun WebOsAddScreen(nav: Navigator) {
                         }
                         Column(Modifier.padding(start = 14.dp)) {
                             Text(f.name, style = MaterialTheme.typography.titleSmall)
-                            Text(if (existing != null) "${f.host} · Đã có trong Thiết bị của tôi" else f.host,
+                            Text(if (existing != null) stringResource(R.string.already_saved, f.host) else f.host,
                                 style = MaterialTheme.typography.bodySmall, color = if (existing != null) style.accent else palette.inkSoft)
                         }
                     }
                 }
-                Text("Hoặc nhập địa chỉ IP của TV", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
-                Text("Trên TV: Cài đặt → Mạng → Thông tin mạng.", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
+                Text(stringResource(R.string.or_enter_ip), style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 16.dp))
+                Text(stringResource(R.string.webos_ip_hint), style = MaterialTheme.typography.bodySmall, color = palette.inkSoft)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(
                         value = manual, onValueChange = { manual = it.filter { c -> c.isDigit() || c == '.' } },
@@ -172,7 +174,7 @@ fun WebOsAddScreen(nav: Navigator) {
                         enabled = manual.count { it == '.' } == 3,
                         colors = ButtonDefaults.buttonColors(containerColor = style.accent),
                         modifier = Modifier.padding(start = 10.dp),
-                    ) { Text("Kết nối") }
+                    ) { Text(stringResource(R.string.connect)) }
                 }
             } else {
                 val client = remember(tv.host) { webOsClient(context, tv.host) }
@@ -193,22 +195,21 @@ fun WebOsAddScreen(nav: Navigator) {
                 }
                 when (state) {
                     WebOsClient.State.WaitingForApproval -> {
-                        Text("Chấp nhận trên TV", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 8.dp))
-                        Text("${tv.name} đang hiện hộp thoại hỏi có cho phép điện thoại này điều khiển không. " +
-                            "Dùng remote LG chọn \"Chấp nhận\".", style = MaterialTheme.typography.bodyMedium, color = palette.inkSoft)
+                        Text(stringResource(R.string.accept_on_tv), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 8.dp))
+                        Text(stringResource(R.string.webos_prompt_body, tv.name), style = MaterialTheme.typography.bodyMedium, color = palette.inkSoft)
                         CircularProgressIndicator(color = style.accent)
                     }
                     WebOsClient.State.Rejected, WebOsClient.State.Unreachable -> {
-                        Text(if (state == WebOsClient.State.Rejected) "TV đã từ chối" else "Không kết nối được tới TV",
+                        Text(stringResource(if (state == WebOsClient.State.Rejected) R.string.tv_refused else R.string.cannot_connect_tv),
                             style = MaterialTheme.typography.headlineSmall)
                         error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = palette.inkSoft) }
                         Button(onClick = { scope.launch { client.disconnect(); delay(300); client.connect() } },
-                            colors = ButtonDefaults.buttonColors(containerColor = style.accent)) { Text("Thử lại") }
-                        TextButton(onClick = { picked = null }) { Text("Chọn TV khác") }
+                            colors = ButtonDefaults.buttonColors(containerColor = style.accent)) { Text(stringResource(R.string.retry)) }
+                        TextButton(onClick = { picked = null }) { Text(stringResource(R.string.pick_other_tv)) }
                     }
                     else -> Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 24.dp)) {
                         CircularProgressIndicator(color = style.accent, modifier = Modifier.size(28.dp))
-                        Text("Đang kết nối tới ${tv.name}…", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
+                        Text(stringResource(R.string.connecting_to, tv.name), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp))
                     }
                 }
             }
@@ -268,7 +269,7 @@ fun WebOsRemoteScreen(nav: Navigator, device: UserDevice) {
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.padding(start = 10.dp).size(52.dp).clip(CircleShape).background(palette.key)
                         .clickable { showInputs = true },
-                ) { Icon(Icons.Filled.Input, "Nguồn vào", tint = palette.ink) }
+                ) { Icon(Icons.Filled.Input, stringResource(R.string.input_source), tint = palette.ink) }
                 IrKey(k("MUTE"), Modifier.padding(start = 10.dp).size(52.dp), shape = CircleShape)
             }
             NavModeSwitch(navMode, style.accent) { navMode = it; NavModePref.save(context, it) }
@@ -278,18 +279,18 @@ fun WebOsRemoteScreen(nav: Navigator, device: UserDevice) {
                 MousePad(client, style.accent)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                HRocker("Âm lượng", k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f), icon = Icons.AutoMirrored.Filled.VolumeUp)
-                HRocker("Kênh", k("CH_DOWN"), k("CH_UP"), Modifier.weight(1f))
+                HRocker(stringResource(R.string.volume), k("VOL_DOWN"), k("VOL_UP"), Modifier.weight(1f), icon = Icons.AutoMirrored.Filled.VolumeUp)
+                HRocker(stringResource(R.string.channel_short), k("CH_DOWN"), k("CH_UP"), Modifier.weight(1f))
             }
             volume?.let { v ->
-                Text(if (v.muted) "Đang tắt tiếng" else "Âm lượng ${v.level}", style = MaterialTheme.typography.labelMedium, color = palette.inkSoft)
+                Text(if (v.muted) stringResource(R.string.muted) else stringResource(R.string.volume_level, v.level), style = MaterialTheme.typography.labelMedium, color = palette.inkSoft)
             }
             KeyRow(listOf(k("BACK"), k("HOME"), k("SETTINGS"), k("EXIT")))
             KeyRow(listOf(k("REWIND"), k("PLAY"), k("PAUSE"), k("STOP"), k("FAST_FORWARD")))
             KeyRow(listOf(k("RED"), k("GREEN"), k("YELLOW"), k("BLUE")), height = 20.dp) { com.minhngoc.irremote.ui.remote.KEY_COLORS[it.funcKey] }
 
             if (apps.isNotEmpty()) {
-                Text("Ứng dụng trên TV", style = MaterialTheme.typography.titleSmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
+                Text(stringResource(R.string.tv_apps), style = MaterialTheme.typography.titleSmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     apps.take(16).forEach { app ->
                         Text(
@@ -332,7 +333,7 @@ private fun MousePad(client: WebOsClient, accent: Color) {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Filled.Mouse, null, tint = accent, modifier = Modifier.size(36.dp))
-                Text("Kéo để di chuột · chạm để click", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
+                Text(stringResource(R.string.mouse_hint), style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
                     modifier = Modifier.padding(top = 10.dp))
             }
         }
@@ -355,7 +356,7 @@ private fun MousePad(client: WebOsClient, accent: Color) {
                         }
                     }
                 },
-        ) { Text("Cuộn", style = MaterialTheme.typography.labelSmall, color = palette.inkSoft) }
+        ) { Text(stringResource(R.string.scroll), style = MaterialTheme.typography.labelSmall, color = palette.inkSoft) }
     }
 }
 
@@ -379,15 +380,15 @@ private fun TypeToLg(client: WebOsClient) {
         OutlinedTextField(
             value = text, onValueChange = { text = it }, singleLine = true,
             leadingIcon = { Icon(Icons.Filled.Keyboard, null, tint = palette.inkSoft) },
-            placeholder = { Text("Gõ chữ lên TV") },
+            placeholder = { Text(stringResource(R.string.type_on_tv)) },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { client.sendEnter() }),
             modifier = Modifier.weight(1f),
         )
         DictateButton { spoken -> text = spoken }
-        IconButton(onClick = { client.sendEnter() }, enabled = text.isNotEmpty()) { Icon(Icons.AutoMirrored.Filled.Send, "Enter trên TV") }
+        IconButton(onClick = { client.sendEnter() }, enabled = text.isNotEmpty()) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.lg_enter)) }
     }
-    Text("Mở ô tìm kiếm trên TV trước; chữ gõ hoặc đọc ở đây hiện ngay trên TV.",
+    Text(stringResource(R.string.lg_type_hint),
         style = MaterialTheme.typography.bodySmall, color = palette.inkSoft, modifier = Modifier.fillMaxWidth())
 }
 
@@ -397,13 +398,13 @@ private fun InputPicker(client: WebOsClient, onDismiss: () -> Unit) {
     LaunchedEffect(client) { inputs = client.inputs() }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Chọn nguồn vào") },
+        title = { Text(stringResource(R.string.choose_input)) },
         text = {
             Column {
                 val list = inputs
                 when {
                     list == null -> CircularProgressIndicator()
-                    list.isEmpty() -> Text("TV không trả về danh sách nguồn vào.")
+                    list.isEmpty() -> Text(stringResource(R.string.no_inputs))
                     else -> list.forEach { input ->
                         Text(input.label, style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.fillMaxWidth().clickable { client.switchInput(input.id); onDismiss() }.padding(vertical = 12.dp))
@@ -411,7 +412,7 @@ private fun InputPicker(client: WebOsClient, onDismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Đóng") } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.close)) } },
     )
 }
 
@@ -422,10 +423,10 @@ private fun WebOsBanner(client: WebOsClient) {
     val error by client.lastError.collectAsState()
     val text = when (state) {
         WebOsClient.State.Connected -> return
-        WebOsClient.State.Idle, WebOsClient.State.Connecting -> "Đang kết nối tới TV…"
-        WebOsClient.State.WaitingForApproval -> "Chấp nhận yêu cầu kết nối trên TV bằng remote LG."
-        WebOsClient.State.Rejected -> "TV đã từ chối kết nối. Xóa thiết bị rồi thêm lại để ghép nối lại."
-        WebOsClient.State.Unreachable -> "Chưa kết nối được tới TV. TV đang tắt? Nút nguồn sẽ thử bật bằng Wake-on-LAN."
+        WebOsClient.State.Idle, WebOsClient.State.Connecting -> stringResource(R.string.connecting_tv)
+        WebOsClient.State.WaitingForApproval -> stringResource(R.string.webos_waiting)
+        WebOsClient.State.Rejected -> stringResource(R.string.webos_rejected)
+        WebOsClient.State.Unreachable -> stringResource(R.string.webos_unreachable)
     }
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(16.dp)).background(palette.body).padding(14.dp)) {
         Text(text, style = MaterialTheme.typography.bodySmall,

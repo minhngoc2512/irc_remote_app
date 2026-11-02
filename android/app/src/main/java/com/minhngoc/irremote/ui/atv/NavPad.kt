@@ -1,5 +1,7 @@
 package com.minhngoc.irremote.ui.atv
 
+import androidx.compose.ui.res.stringResource
+import com.minhngoc.irremote.R
 import android.content.Context
 import android.view.KeyEvent
 import androidx.compose.animation.core.Animatable
@@ -68,7 +70,7 @@ fun NavModeSwitch(mode: NavMode, accent: Color, onChange: (NavMode) -> Unit) {
         Modifier.clip(RoundedCornerShape(20.dp)).background(palette.groove).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        listOf(NavMode.Keys to ("Phím" to Icons.Filled.Gamepad), NavMode.Touchpad to ("Bàn rê" to Icons.Filled.SwipeVertical))
+        listOf(NavMode.Keys to (stringResource(R.string.nav_keys) to Icons.Filled.Gamepad), NavMode.Touchpad to (stringResource(R.string.nav_touchpad) to Icons.Filled.SwipeVertical))
             .forEach { (m, labelIcon) ->
                 val selected = m == mode
                 Row(
@@ -147,7 +149,7 @@ fun Touchpad(client: AtvRemote, accent: Color) {
                 lastDir?.let { Icon(it, null, tint = accent, modifier = Modifier.size(36.dp)) }
                     ?: Text("OK", style = MaterialTheme.typography.titleMedium, color = accent)
             }
-            Text("Vuốt để di chuyển · chạm để chọn", style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
+            Text(stringResource(R.string.swipe_hint), style = MaterialTheme.typography.bodySmall, color = palette.inkSoft,
                 modifier = Modifier.padding(top = 14.dp).alpha(0.9f))
         }
     }
